@@ -40,7 +40,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      engine.stop();
+      engine.cleanup();
       engineRef.current = null;
     };
   }, [canvasRef]);

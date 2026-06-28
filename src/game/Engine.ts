@@ -54,40 +54,62 @@ export class GameEngine {
     this.canvas.height = this.screenHeight;
   }
 
-  private setupInputListeners() {
-    // Keyboard inputs
-    window.addEventListener('keydown', (e) => {
-      this.keys[e.key.toLowerCase()] = true;
-      if (e.key === ' ' || e.key === 'Shift') {
-        e.preventDefault(); // stop browser scroll
-      }
-      if (e.key === 'q' || e.key === 'Q') {
-        this.player?.cycleWeapon();
-      }
-    });
+  private handleKeyDown = (e: KeyboardEvent) => {
+    this.keys[e.key.toLowerCase()] = true;
+    if (e.key === ' ' || e.key === 'Shift') {
+      e.preventDefault(); // stop browser scroll
+    }
+    if (e.key === 'q' || e.key === 'Q') {
+      this.player?.cycleWeapon();
+    }
+  };
 
-    window.addEventListener('keyup', (e) => {
-      this.keys[e.key.toLowerCase()] = false;
-    });
+  private handleKeyUp = (e: KeyboardEvent) => {
+    this.keys[e.key.toLowerCase()] = false;
+  };
 
-    // Mouse inputs
-    window.addEventListener('mousemove', (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      this.mouseX = e.clientX - rect.left;
-      this.mouseY = e.clientY - rect.top;
-    });
+  private handleMouseMove = (e: MouseEvent) => {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseX = e.clientX - rect.left;
+    this.mouseY = e.clientY - rect.top;
+  };
 
-    window.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { // left click
+  private handleMouseDown = (e: MouseEvent) => {
+    if (e.button === 0) { // left click
+      if (e.target === this.canvas) {
         this.mouseClicked = true;
       }
-    });
+    }
+  };
 
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) {
-        this.mouseClicked = false;
-      }
-    });
+  private handleMouseUp = (e: MouseEvent) => {
+    if (e.button === 0) {
+      this.mouseClicked = false;
+    }
+  };
+
+  private handleBlur = () => {
+    this.keys = {};
+    this.mouseClicked = false;
+  };
+
+  private setupInputListeners() {
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('mousemove', this.handleMouseMove);
+    window.addEventListener('mousedown', this.handleMouseDown);
+    window.addEventListener('mouseup', this.handleMouseUp);
+    window.addEventListener('blur', this.handleBlur);
+  }
+
+  cleanup() {
+    this.stop();
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    window.removeEventListener('mousedown', this.handleMouseDown);
+    window.removeEventListener('mouseup', this.handleMouseUp);
+    window.removeEventListener('blur', this.handleBlur);
   }
 
   // Starts the playing phase

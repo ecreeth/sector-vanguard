@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { PlayerStats, WeaponType } from '../game/Types';
 import { 
   Heart, Shield as ShieldIcon, Zap, Coins, Crosshair, 
@@ -15,6 +15,8 @@ interface HUDProps {
   onBuyWeapon: (type: WeaponType) => void;
   onToggleSound: () => void;
   soundEnabled: boolean;
+  crtEnabled: boolean;
+  onToggleCrt: () => void;
   onQuit: () => void;
 }
 
@@ -24,9 +26,13 @@ export const HUD: React.FC<HUDProps> = ({
   onBuyWeapon,
   onToggleSound,
   soundEnabled,
+  crtEnabled,
+  onToggleCrt,
   onQuit
 }) => {
   const { health, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons } = stats;
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   return (
     <div style={hudStyles.container} className="hud-root">
@@ -83,6 +89,9 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Global Controls */}
         <div style={hudStyles.globalButtons}>
+          <button onClick={onToggleCrt} style={hudStyles.controlBtn} title="Toggle CRT Screen Scanlines">
+            CRT: {crtEnabled ? 'ON' : 'OFF'}
+          </button>
           <button onClick={onToggleSound} style={hudStyles.controlBtn}>
             {soundEnabled ? <Volume2 size={16} color="var(--neon-cyan)" /> : <VolumeX size={16} color="var(--text-muted)" />}
           </button>
@@ -93,125 +102,161 @@ export const HUD: React.FC<HUDProps> = ({
       </div>
 
       {/* 2. LEFT VITALS CARD */}
-      <div style={hudStyles.leftCard} className="hud-panel">
-        <div style={hudStyles.panelTitle}>VITALS ANALYSIS</div>
-        
-        {/* Health */}
-        <div style={hudStyles.vitalRow}>
-          <div style={hudStyles.vitalHeader}>
-            <Heart size={14} color="var(--neon-red)" style={{ marginRight: 6 }} />
-            <span>CORE INTEGRITY</span>
-            <span style={{ marginLeft: 'auto', color: 'var(--neon-red)', fontWeight: 'bold' }}>
-              {health}%
-            </span>
+      {leftCollapsed ? (
+        <button
+          onClick={() => setLeftCollapsed(false)}
+          style={{ ...hudStyles.collapsedTab, left: '16px', top: '80px' }}
+          className="hud-panel"
+        >
+          [ + ] VITALS
+        </button>
+      ) : (
+        <div style={hudStyles.leftCard} className="hud-panel">
+          <div style={hudStyles.panelTitle}>
+            <span>VITALS ANALYSIS</span>
+            <button 
+              onClick={() => setLeftCollapsed(true)} 
+              style={hudStyles.collapseBtn}
+            >
+              [ MINIMIZE ]
+            </button>
           </div>
-          <div style={hudStyles.vitalBarBg}>
-            <div style={{ ...hudStyles.vitalBarFill, width: `${health}%`, backgroundColor: 'var(--neon-red)' }} />
+          
+          {/* Health */}
+          <div style={hudStyles.vitalRow}>
+            <div style={hudStyles.vitalHeader}>
+              <Heart size={14} color="var(--neon-red)" style={{ marginRight: 6 }} />
+              <span>CORE INTEGRITY</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--neon-red)', fontWeight: 'bold' }}>
+                {health}%
+              </span>
+            </div>
+            <div style={hudStyles.vitalBarBg}>
+              <div style={{ ...hudStyles.vitalBarFill, width: `${health}%`, backgroundColor: 'var(--neon-red)' }} />
+            </div>
           </div>
-        </div>
 
-        {/* Shield */}
-        <div style={hudStyles.vitalRow}>
-          <div style={hudStyles.vitalHeader}>
-            <ShieldIcon size={14} color="var(--neon-cyan)" style={{ marginRight: 6 }} />
-            <span>SHIELD MATRIX</span>
-            <span style={{ marginLeft: 'auto', color: 'var(--neon-cyan)', fontWeight: 'bold' }}>
-              {shield} / {maxShield}
-            </span>
+          {/* Shield */}
+          <div style={hudStyles.vitalRow}>
+            <div style={hudStyles.vitalHeader}>
+              <ShieldIcon size={14} color="var(--neon-cyan)" style={{ marginRight: 6 }} />
+              <span>SHIELD MATRIX</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--neon-cyan)', fontWeight: 'bold' }}>
+                {shield} / {maxShield}
+              </span>
+            </div>
+            <div style={hudStyles.vitalBarBg}>
+              <div style={{ ...hudStyles.vitalBarFill, width: `${(shield / maxShield) * 100}%`, backgroundColor: 'var(--neon-cyan)' }} />
+            </div>
           </div>
-          <div style={hudStyles.vitalBarBg}>
-            <div style={{ ...hudStyles.vitalBarFill, width: `${(shield / maxShield) * 100}%`, backgroundColor: 'var(--neon-cyan)' }} />
-          </div>
-        </div>
 
-        {/* Dash */}
-        <div style={hudStyles.vitalRow}>
-          <div style={hudStyles.vitalHeader}>
-            <Zap size={14} color={dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)'} style={{ marginRight: 6 }} />
-            <span>THRUSTER BOOST (SHIFT)</span>
-            <span style={{ 
-              marginLeft: 'auto', 
-              color: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)',
-              fontWeight: 'bold'
-            }}>
-              {dashCooldown === 0 ? 'READY' : 'CHARGING'}
-            </span>
+          {/* Dash */}
+          <div style={hudStyles.vitalRow}>
+            <div style={hudStyles.vitalHeader}>
+              <Zap size={14} color={dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)'} style={{ marginRight: 6 }} />
+              <span>THRUSTER BOOST (SHIFT)</span>
+              <span style={{ 
+                marginLeft: 'auto', 
+                color: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)',
+                fontWeight: 'bold'
+              }}>
+                {dashCooldown === 0 ? 'READY' : 'CHARGING'}
+              </span>
+            </div>
+            <div style={hudStyles.vitalBarBg}>
+              <div 
+                style={{ 
+                  ...hudStyles.vitalBarFill, 
+                  width: `${dashCooldown === 0 ? 100 : (1 - dashCooldown) * 100}%`, 
+                  backgroundColor: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)' 
+                }} 
+              />
+            </div>
           </div>
-          <div style={hudStyles.vitalBarBg}>
-            <div 
-              style={{ 
-                ...hudStyles.vitalBarFill, 
-                width: `${dashCooldown === 0 ? 100 : (1 - dashCooldown) * 100}%`, 
-                backgroundColor: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)' 
-              }} 
-            />
-          </div>
-        </div>
 
-        {/* Tech Credits */}
-        <div style={hudStyles.creditsDisplay}>
-          <Coins size={16} color="var(--neon-yellow)" style={{ marginRight: 6 }} />
-          <span>TECH CREDITS:</span>
-          <span style={hudStyles.creditsAmount}>{credits} CR</span>
+          {/* Tech Credits */}
+          <div style={hudStyles.creditsDisplay}>
+            <Coins size={16} color="var(--neon-yellow)" style={{ marginRight: 6 }} />
+            <span>TECH CREDITS:</span>
+            <span style={hudStyles.creditsAmount}>{credits} CR</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 3. BOTTOM RIGHT SHOP & WEAPONS CARD */}
-      <div style={hudStyles.rightCard} className="hud-panel">
-        <div style={hudStyles.panelTitle}>TACTICAL WEAPON LOADOUT</div>
-
-        {/* Active Weapon */}
-        <div style={hudStyles.activeWeaponArea}>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>EQUIPPED WEAPON</div>
-          <div style={hudStyles.activeWeaponName}>{weapons[currentWeapon].name}</div>
-          <div style={hudStyles.ammoDisplay}>
-            AMMO:{' '}
-            <span style={{ color: ammo > 0 ? '#ffffff' : 'var(--neon-red)', fontSize: '20px', fontWeight: 'bold' }}>
-              {ammo === Infinity ? '∞' : ammo}
-            </span>
-            {ammo !== Infinity && <span style={{ color: 'var(--text-muted)' }}> / {maxAmmo}</span>}
+      {rightCollapsed ? (
+        <button
+          onClick={() => setRightCollapsed(false)}
+          style={{ ...hudStyles.collapsedTab, right: '16px', bottom: '16px' }}
+          className="hud-panel"
+        >
+          [ + ] WEAPONS
+        </button>
+      ) : (
+        <div style={hudStyles.rightCard} className="hud-panel">
+          <div style={hudStyles.panelTitle}>
+            <span>TACTICAL WEAPON LOADOUT</span>
+            <button 
+              onClick={() => setRightCollapsed(true)} 
+              style={hudStyles.collapseBtn}
+            >
+              [ MINIMIZE ]
+            </button>
           </div>
-          <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: 4 }}>
-            PRESS [Q] TO CYCLE WEAPONS
+
+          {/* Active Weapon */}
+          <div style={hudStyles.activeWeaponArea}>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>EQUIPPED WEAPON</div>
+            <div style={hudStyles.activeWeaponName}>{weapons[currentWeapon].name}</div>
+            <div style={hudStyles.ammoDisplay}>
+              AMMO:{' '}
+              <span style={{ color: ammo > 0 ? '#ffffff' : 'var(--neon-red)', fontSize: '20px', fontWeight: 'bold' }}>
+                {ammo === Infinity ? '∞' : ammo}
+              </span>
+              {ammo !== Infinity && <span style={{ color: 'var(--text-muted)' }}> / {maxAmmo}</span>}
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: 4 }}>
+              PRESS [Q] TO CYCLE WEAPONS
+            </div>
           </div>
-        </div>
 
-        {/* Weapons Shop */}
-        <div style={hudStyles.shopArea}>
-          <div style={hudStyles.shopTitle}>ARMORY ACQUISITIONS</div>
-          
-          {(['SHOTGUN', 'PLASMA_RIFLE'] as WeaponType[]).map(wType => {
-            const wep = weapons[wType];
-            const cost = wep.unlocked ? Math.floor(wep.cost * 0.15) : wep.cost;
-            const canAfford = credits >= cost;
+          {/* Weapons Shop */}
+          <div style={hudStyles.shopArea}>
+            <div style={hudStyles.shopTitle}>ARMORY ACQUISITIONS</div>
+            
+            {(['SHOTGUN', 'PLASMA_RIFLE'] as WeaponType[]).map(wType => {
+              const wep = weapons[wType];
+              const cost = wep.unlocked ? Math.floor(wep.cost * 0.15) : wep.cost;
+              const canAfford = credits >= cost;
 
-            return (
-              <div key={wType} style={hudStyles.shopItem}>
-                <div style={hudStyles.shopItemText}>
-                  <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{wep.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {wep.unlocked ? 'Ammo Refill' : 'Unlock Weapon'}
+              return (
+                <div key={wType} style={hudStyles.shopItem}>
+                  <div style={hudStyles.shopItemText}>
+                    <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{wep.name}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {wep.unlocked ? 'Ammo Refill' : 'Unlock Weapon'}
+                    </div>
                   </div>
+                  
+                  <button
+                    onClick={() => onBuyWeapon(wType)}
+                    disabled={!canAfford}
+                    style={{
+                      ...hudStyles.shopBuyBtn,
+                      borderColor: wep.unlocked ? 'var(--neon-green)' : 'var(--neon-yellow)',
+                      color: wep.unlocked ? 'var(--neon-green)' : 'var(--neon-yellow)',
+                      opacity: canAfford ? 1 : 0.4,
+                      cursor: canAfford ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    {cost} CR
+                  </button>
                 </div>
-                
-                <button
-                  onClick={() => onBuyWeapon(wType)}
-                  disabled={!canAfford}
-                  style={{
-                    ...hudStyles.shopBuyBtn,
-                    borderColor: wep.unlocked ? 'var(--neon-green)' : 'var(--neon-yellow)',
-                    color: wep.unlocked ? 'var(--neon-green)' : 'var(--neon-yellow)',
-                    opacity: canAfford ? 1 : 0.4,
-                    cursor: canAfford ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  {cost} CR
-                </button>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -305,7 +350,37 @@ const hudStyles: Record<string, React.CSSProperties> = {
     color: 'var(--neon-cyan)',
     borderBottom: '1px solid var(--border-color)',
     paddingBottom: '4px',
-    marginBottom: '4px'
+    marginBottom: '4px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%'
+  },
+  collapsedTab: {
+    position: 'absolute',
+    padding: '8px 14px',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    fontFamily: 'var(--font-header)',
+    color: 'var(--neon-cyan)',
+    background: 'var(--bg-panel)',
+    border: '1px solid var(--border-color)',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    borderRadius: '4px',
+    boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+    transition: 'all 0.2s',
+    letterSpacing: '1px'
+  },
+  collapseBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '10px',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-mono)',
+    padding: '0 4px',
+    transition: 'color 0.2s'
   },
   vitalRow: {
     display: 'flex',

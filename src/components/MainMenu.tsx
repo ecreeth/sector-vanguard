@@ -5,12 +5,16 @@ interface MainMenuProps {
   onStartGame: (biome: string) => void;
   selectedBiome: string;
   setSelectedBiome: (biome: string) => void;
+  crtEnabled: boolean;
+  onToggleCrt: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
   onStartGame,
   selectedBiome,
-  setSelectedBiome
+  setSelectedBiome,
+  crtEnabled,
+  onToggleCrt
 }) => {
   const biomes = [
     {
@@ -37,7 +41,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     <div style={styles.overlay} className="menu-root">
       {/* Visual background grids */}
       <div className="scanline-bar" />
-      <div className="crt-overlay" />
 
       {/* Main Title Header */}
       <div style={styles.headerArea}>
@@ -106,14 +109,24 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       </div>
 
-      {/* Deploy Button */}
-      <button 
-        onClick={() => onStartGame(selectedBiome)} 
-        style={styles.deployBtn} 
-        className="sci-fi-button success"
-      >
-        DEPLOY STRATEGIC COMMANDO
-      </button>
+      {/* Deploy & Options Action Container */}
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <button 
+          onClick={onToggleCrt} 
+          className="sci-fi-button"
+          style={{ fontFamily: 'var(--font-header)', fontSize: '13px', padding: '12px 24px', letterSpacing: '1px' }}
+        >
+          CRT SCANLINES: {crtEnabled ? 'ON' : 'OFF'}
+        </button>
+
+        <button 
+          onClick={() => onStartGame(selectedBiome)} 
+          style={styles.deployBtn} 
+          className="sci-fi-button success"
+        >
+          DEPLOY STRATEGIC COMMANDO
+        </button>
+      </div>
     </div>
   );
 };

@@ -12,6 +12,7 @@ function App() {
   const [gameState, setGameState] = useState<'MENU' | 'PLAYING' | 'GAMEOVER' | 'VICTORY'>('MENU');
   const [selectedBiome, setSelectedBiome] = useState<string>('FOREST');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [crtEnabled, setCrtEnabled] = useState<boolean>(true);
   
   // Track state updates directly from the GameEngine loop
   const [engineState, setEngineState] = useState<EngineStateUpdate | null>(null);
@@ -54,6 +55,8 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* Global CRT Screen Filter */}
+      {crtEnabled && <div className="crt-overlay" />}
       {/* 1. Core Game Canvas */}
       {gameState !== 'MENU' && (
         <GameCanvas
@@ -72,6 +75,8 @@ function App() {
           onBuyWeapon={handleBuyWeapon}
           onToggleSound={handleToggleSound}
           soundEnabled={soundEnabled}
+          crtEnabled={crtEnabled}
+          onToggleCrt={() => setCrtEnabled(!crtEnabled)}
           onQuit={handleQuit}
         />
       )}
@@ -82,13 +87,14 @@ function App() {
           onStartGame={handleStartGame}
           selectedBiome={selectedBiome}
           setSelectedBiome={setSelectedBiome}
+          crtEnabled={crtEnabled}
+          onToggleCrt={() => setCrtEnabled(!crtEnabled)}
         />
       )}
 
       {/* 4. Game Over Screen Overlay */}
       {gameState === 'GAMEOVER' && (
         <div className="game-overlay fade-in">
-          <div className="crt-overlay" />
           <div className="overlay-card hud-panel alert-red">
             <h2 className="overlay-title blink-anim" style={{ color: 'var(--neon-red)', animation: 'blink 1.2s infinite' }}>
               SYSTEM COLLAPSE
@@ -116,7 +122,6 @@ function App() {
       {/* 5. Victory Screen Overlay */}
       {gameState === 'VICTORY' && (
         <div className="game-overlay fade-in">
-          <div className="crt-overlay" />
           <div className="overlay-card hud-panel alert-green">
             <h2 className="overlay-title" style={{ color: 'var(--neon-green)', textShadow: '0 0 10px var(--neon-green-glow)' }}>
               MISSION COMPLETE
