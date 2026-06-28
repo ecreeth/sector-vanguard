@@ -113,19 +113,70 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
-      {/* 2. LEFT VITALS CARD */}
+      {/* 2. TOP-CENTER VITALS BAR */}
+      <div style={hudStyles.vitalsBar} className="hud-panel">
+        {/* Health */}
+        <div style={hudStyles.vitalsItem}>
+          <div style={hudStyles.vitalsLabel}>
+            <Heart size={12} color="var(--neon-red)" />
+            <span style={{ color: 'var(--neon-red)' }}>{health}/{maxHealth}</span>
+          </div>
+          <div style={hudStyles.vitalsBarBg}>
+            <div style={{ ...hudStyles.vitalsBarFill, width: `${healthPercent}%`, backgroundColor: 'var(--neon-red)' }} />
+          </div>
+        </div>
+
+        {/* Shield */}
+        <div style={hudStyles.vitalsItem}>
+          <div style={hudStyles.vitalsLabel}>
+            <ShieldIcon size={12} color="var(--neon-cyan)" />
+            <span style={{ color: 'var(--neon-cyan)' }}>{shield}/{maxShield}</span>
+          </div>
+          <div style={hudStyles.vitalsBarBg}>
+            <div style={{ ...hudStyles.vitalsBarFill, width: `${shieldPercent}%`, backgroundColor: 'var(--neon-cyan)' }} />
+          </div>
+        </div>
+
+        {/* Dash */}
+        <div style={hudStyles.vitalsItem}>
+          <div style={hudStyles.vitalsLabel}>
+            <Zap size={12} color={dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)'} />
+            <span style={{ color: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)' }}>
+              {dashCooldown === 0 ? 'DASH' : 'CDR'}
+            </span>
+          </div>
+          <div style={hudStyles.vitalsBarBg}>
+            <div style={{ 
+              ...hudStyles.vitalsBarFill, 
+              width: `${dashCooldown === 0 ? 100 : (1 - dashCooldown) * 100}%`, 
+              backgroundColor: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)' 
+            }} />
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
+
+        {/* Credits */}
+        <div style={hudStyles.vitalsLabel}>
+          <Coins size={12} color="var(--neon-yellow)" />
+          <span style={{ color: 'var(--neon-yellow)', fontWeight: 'bold', fontSize: '13px' }}>{credits} CR</span>
+        </div>
+      </div>
+
+      {/* 3. LEFT COMMAND TERMINAL */}
       {leftCollapsed ? (
         <button
           onClick={() => setLeftCollapsed(false)}
           style={{ ...hudStyles.collapsedTab, left: '16px', top: '80px' }}
           className="hud-panel"
         >
-          [ + ] VITALS
+          [ + ] UPGRADES
         </button>
       ) : (
         <div style={hudStyles.leftCard} className="hud-panel">
           <div style={hudStyles.panelTitle}>
-            <span>VITALS ANALYSIS</span>
+            <span>COMMAND TERMINAL</span>
             <button 
               onClick={() => setLeftCollapsed(true)} 
               style={hudStyles.collapseBtn}
@@ -133,108 +184,43 @@ export const HUD: React.FC<HUDProps> = ({
               [ MINIMIZE ]
             </button>
           </div>
-          
-          {/* Health */}
-          <div style={hudStyles.vitalRow}>
-            <div style={hudStyles.vitalHeader}>
-              <Heart size={14} color="var(--neon-red)" style={{ marginRight: 6 }} />
-              <span>CORE INTEGRITY</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--neon-red)', fontWeight: 'bold' }}>
-                {health} / {maxHealth}
-              </span>
-            </div>
-            <div style={hudStyles.vitalBarBg}>
-              <div style={{ ...hudStyles.vitalBarFill, width: `${healthPercent}%`, backgroundColor: 'var(--neon-red)' }} />
-            </div>
-          </div>
 
-          {/* Shield */}
-          <div style={hudStyles.vitalRow}>
-            <div style={hudStyles.vitalHeader}>
-              <ShieldIcon size={14} color="var(--neon-cyan)" style={{ marginRight: 6 }} />
-              <span>SHIELD MATRIX</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--neon-cyan)', fontWeight: 'bold' }}>
-                {shield} / {maxShield}
-              </span>
-            </div>
-            <div style={hudStyles.vitalBarBg}>
-              <div style={{ ...hudStyles.vitalBarFill, width: `${shieldPercent}%`, backgroundColor: 'var(--neon-cyan)' }} />
-            </div>
-          </div>
-
-          {/* Dash */}
-          <div style={hudStyles.vitalRow}>
-            <div style={hudStyles.vitalHeader}>
-              <Zap size={14} color={dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)'} style={{ marginRight: 6 }} />
-              <span>THRUSTER BOOST (SHIFT)</span>
-              <span style={{ 
-                marginLeft: 'auto', 
-                color: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)',
-                fontWeight: 'bold'
-              }}>
-                {dashCooldown === 0 ? 'READY' : 'CHARGING'}
-              </span>
-            </div>
-            <div style={hudStyles.vitalBarBg}>
-              <div 
-                style={{ 
-                  ...hudStyles.vitalBarFill, 
-                  width: `${dashCooldown === 0 ? 100 : (1 - dashCooldown) * 100}%`, 
-                  backgroundColor: dashCooldown === 0 ? 'var(--neon-green)' : 'var(--neon-yellow)' 
-                }} 
-              />
-            </div>
-          </div>
-
-          {/* Tech Credits */}
-          <div style={hudStyles.creditsDisplay}>
-            <Coins size={16} color="var(--neon-yellow)" style={{ marginRight: 6 }} />
-            <span>TECH CREDITS:</span>
-            <span style={hudStyles.creditsAmount}>{credits} CR</span>
-          </div>
-
-          {/* Command Terminal Upgrades */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
-            <div style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 6 }}>
-              COMMAND TERMINAL
-            </div>
-            {([
-              { type: 'HEALTH' as const, label: 'MAX HP', lvl: upgrades.healthLvl, cost: upgrades.healthCost, color: 'var(--neon-red)', max: 4 },
-              { type: 'SHIELD' as const, label: 'MAX SHIELD', lvl: upgrades.shieldLvl, cost: upgrades.shieldCost, color: 'var(--neon-cyan)', max: 4 },
-              { type: 'DASH' as const, label: 'DASH CDR', lvl: upgrades.dashLvl, cost: upgrades.dashCost, color: 'var(--neon-green)', max: 4 },
-              { type: 'RICOCHET' as const, label: 'RICOCHET MOD', lvl: upgrades.ricochetLvl, cost: upgrades.ricochetCost, color: '#c084fc', max: 2 },
-              { type: 'PIERCE' as const, label: 'PIERCE MOD', lvl: upgrades.pierceLvl, cost: upgrades.pierceCost, color: '#ffb703', max: 2 },
-              { type: 'PLASMA_BURN' as const, label: 'PLASMA BURN DoT', lvl: upgrades.plasmaBurnLvl, cost: upgrades.plasmaBurnCost, color: '#f97316', max: 2 }
-            ]).map(u => (
-              <div key={u.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '11px', color: u.color, fontWeight: 'bold' }}>{u.label}</span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {'▰'.repeat(u.lvl)}{'▱'.repeat(u.max - u.lvl)}
-                  </span>
-                </div>
-                {u.lvl < u.max ? (
-                  <button
-                    onClick={() => onBuyUpgrade(u.type)}
-                    disabled={credits < u.cost}
-                    style={{
-                      ...hudStyles.shopBuyBtn,
-                      borderColor: u.color,
-                      color: u.color,
-                      opacity: credits >= u.cost ? 1 : 0.35,
-                      cursor: credits >= u.cost ? 'pointer' : 'not-allowed',
-                      fontSize: '10px',
-                      padding: '2px 7px'
-                    }}
-                  >
-                    {u.cost} CR
-                  </button>
-                ) : (
-                  <span style={{ fontSize: '10px', color: 'var(--neon-green)', fontWeight: 'bold' }}>MAX</span>
-                )}
+          {([
+            { type: 'HEALTH' as const, label: 'MAX HP', lvl: upgrades.healthLvl, cost: upgrades.healthCost, color: 'var(--neon-red)', max: 4 },
+            { type: 'SHIELD' as const, label: 'MAX SHIELD', lvl: upgrades.shieldLvl, cost: upgrades.shieldCost, color: 'var(--neon-cyan)', max: 4 },
+            { type: 'DASH' as const, label: 'DASH CDR', lvl: upgrades.dashLvl, cost: upgrades.dashCost, color: 'var(--neon-green)', max: 4 },
+            { type: 'RICOCHET' as const, label: 'RICOCHET MOD', lvl: upgrades.ricochetLvl, cost: upgrades.ricochetCost, color: '#c084fc', max: 2 },
+            { type: 'PIERCE' as const, label: 'PIERCE MOD', lvl: upgrades.pierceLvl, cost: upgrades.pierceCost, color: '#ffb703', max: 2 },
+            { type: 'PLASMA_BURN' as const, label: 'PLASMA BURN DoT', lvl: upgrades.plasmaBurnLvl, cost: upgrades.plasmaBurnCost, color: '#f97316', max: 2 }
+          ]).map(u => (
+            <div key={u.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '11px', color: u.color, fontWeight: 'bold' }}>{u.label}</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                  {'▰'.repeat(u.lvl)}{'▱'.repeat(u.max - u.lvl)}
+                </span>
               </div>
-            ))}
-          </div>
+              {u.lvl < u.max ? (
+                <button
+                  onClick={() => onBuyUpgrade(u.type)}
+                  disabled={credits < u.cost}
+                  style={{
+                    ...hudStyles.shopBuyBtn,
+                    borderColor: u.color,
+                    color: u.color,
+                    opacity: credits >= u.cost ? 1 : 0.35,
+                    cursor: credits >= u.cost ? 'pointer' : 'not-allowed',
+                    fontSize: '10px',
+                    padding: '2px 7px'
+                  }}
+                >
+                  {u.cost} CR
+                </button>
+              ) : (
+                <span style={{ fontSize: '10px', color: 'var(--neon-green)', fontWeight: 'bold' }}>MAX</span>
+              )}
+            </div>
+          ))}
 
           {/* Build Turret Button */}
           <button
@@ -448,6 +434,45 @@ const hudStyles: Record<string, React.CSSProperties> = {
     padding: '10px 16px',
     pointerEvents: 'auto', // Enable buttons
     height: '48px'
+  },
+  vitalsBar: {
+    position: 'absolute',
+    top: '58px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px 20px',
+    pointerEvents: 'auto',
+    borderRadius: '6px'
+  } as React.CSSProperties,
+  vitalsItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    minWidth: '100px'
+  } as React.CSSProperties,
+  vitalsLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    letterSpacing: '1px'
+  } as React.CSSProperties,
+  vitalsBarBg: {
+    width: '100%',
+    height: '6px',
+    backgroundColor: '#0c0d14',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  vitalsBarFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.15s ease-out'
   },
   baseCounter: {
     display: 'flex',
