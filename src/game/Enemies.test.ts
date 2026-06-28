@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Enemy, enemiesManager } from './Enemies';
 import { GameMap } from './Map';
 import { projectilesManager } from './Projectiles';
+import { basesManager } from './Bases';
 
 vi.mock('./Sound', () => ({
   sound: {
@@ -183,5 +184,57 @@ describe('Enemy Types and AI Behaviors', () => {
     drone.update(500, map, player, []);
     expect(drone.hp).toBe(drone.maxHp - 8);
     expect(drone.plasmaBurnTicks).toBe(5);
+  });
+
+  it('should drop target lock and return home when player flees guard leash radius (240px)', () => {
+    const guard = new Enemy(100, 100, 'DRONE', false, true); // isGuard = true
+    const player = { x: 120, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+    const map = new GameMap('FOREST');
+
+    // 1. Player is close: guard acquires target
+    guard.update(16, map, player, []);
+    expect(guard.targetUnit).toBe(player);
+
+    // Move guard slightly out to chase
+    guard.x = 150;
+    
+    // 2. Player flees beyond 240px from guard home origin (100, 100) -> player at (350, 100)
+    player.x = 350;
+    guard.update(16, map, player, []);
+    
+    // Guard should drop target lock!
+    expect(guard.targetUnit).toBeNull();
+    
+    // 3. Since guard has no target and is far from home (150, 100), update should steer them home (homeDx < 0)
+    expect(guard.vx).toBeLessThan(0);
+  });
+
+  it('should not allow base guards to march off and assault player outposts on the other side of the map', () => {
+    const guard = new Enemy(100, 100, 'DRONE', false, true); // isGuard = true
+    const player = { x: 999, y: 999, radius: 16, takeDamage: () => {}, isDead: false };
+    const map = new GameMap('FOREST');
+    
+    // Set a captured player base
+    basesManager.bases = [{ x: 2000, y: 2000, faction: 'PLAYER', radius: 100 } as any];
+
+    guard.update(16, map, player, []);
+
+    // Guard should not steer vertically towards (2000, 2000)
+    expect(guard.vy).toBeLessThan(0.1);
+  });
+
+  it('should allow border infiltration squads to roam and assault player outposts without being leashed', () => {
+    const intruder = new Enemy(100, 100, 'DRONE', false, false); // isGuard = false
+    const player = { x: 999, y: 999, radius: 16, takeDamage: () => {}, isDead: false };
+    const map = new GameMap('FOREST');
+    
+    // Set a captured player base at (200, 200)
+    basesManager.bases = [{ x: 200, y: 200, faction: 'PLAYER', radius: 100 } as any];
+
+    intruder.update(16, map, player, []);
+
+    // Infiltration unit should steer towards (200, 200) - both vx and vy should be positive!
+    expect(intruder.vx).toBeGreaterThan(0);
+    expect(intruder.vy).toBeGreaterThan(0);
   });
 });

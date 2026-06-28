@@ -16,6 +16,7 @@ export class Enemy {
   maxHp: number;
   type: EnemyType;
   isFriendly: boolean; // True = fights for the player, False = fights against player
+  isGuard: boolean = false;
   
   speed: number;
   shootCooldown: number = 0;
@@ -53,11 +54,12 @@ export class Enemy {
     this.plasmaBurnTimer = 500; // every 500ms
   }
 
-  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean) {
+  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean, isGuard: boolean = false) {
     this.x = x;
     this.y = y;
     this.type = type;
     this.isFriendly = isFriendly;
+    this.isGuard = isGuard;
     
     // Set properties based on unit type
     this.patrolX = x;
@@ -367,25 +369,67 @@ export class Enemy {
       const dyPlayer = player.y - this.y;
       const distToPlayer = Math.sqrt(dxPlayer*dxPlayer + dyPlayer*dyPlayer);
 
-      let closestDefender: Enemy | null = null;
-      let minDist = distToPlayer < this.visionRange ? distToPlayer : this.visionRange;
+      if (this.isGuard) {
+        // Leashed target selection: target must be within 240px of home location (patrolX, patrolY)
+        const dxHomePlayer = player.x - this.patrolX;
+        const dyHomePlayer = player.y - this.patrolY;
+        const distHomePlayer = Math.sqrt(dxHomePlayer*dxHomePlayer + dyHomePlayer*dyHomePlayer);
 
-      otherEnemies.forEach(e => {
-        if (e.isFriendly && !e.isDead) {
-          const dx = e.x - this.x;
-          const dy = e.y - this.y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < minDist) {
-            minDist = dist;
-            closestDefender = e;
+        let targetDefender: Enemy | null = null;
+        let minDefDist = 240; // max leash distance from home
+
+        otherEnemies.forEach(e => {
+          if (e.isFriendly && !e.isDead) {
+            const dxHomeDef = e.x - this.patrolX;
+            const dyHomeDef = e.y - this.patrolY;
+            const distHomeDef = Math.sqrt(dxHomeDef*dxHomeDef + dyHomeDef*dyHomeDef);
+            if (distHomeDef < minDefDist) {
+              const dxMeDef = e.x - this.x;
+              const dyMeDef = e.y - this.y;
+              const distMeDef = Math.sqrt(dxMeDef*dxMeDef + dyMeDef*dyMeDef);
+              if (distMeDef < this.visionRange) {
+                minDefDist = distHomeDef;
+                targetDefender = e;
+              }
+            }
           }
-        }
-      });
+        });
 
-      if (closestDefender) {
-        this.targetUnit = closestDefender;
-      } else if (distToPlayer < this.visionRange && !player.isDead) {
-        this.targetUnit = player;
+        // Also ensure guard itself isn't pulled way too far
+        const myDxHome = this.x - this.patrolX;
+        const myDyHome = this.y - this.patrolY;
+        const myDistHome = Math.sqrt(myDxHome*myDxHome + myDyHome*myDyHome);
+
+        if (myDistHome > 240) {
+          // Exceeded leash range: drop all targets
+          this.targetUnit = null;
+        } else if (targetDefender) {
+          this.targetUnit = targetDefender;
+        } else if (distHomePlayer < 240 && distToPlayer < this.visionRange && !player.isDead) {
+          this.targetUnit = player;
+        }
+      } else {
+        // Roaming hostile units: standard target selection
+        let closestDefender: Enemy | null = null;
+        let minDist = distToPlayer < this.visionRange ? distToPlayer : this.visionRange;
+
+        otherEnemies.forEach(e => {
+          if (e.isFriendly && !e.isDead) {
+            const dx = e.x - this.x;
+            const dy = e.y - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < minDist) {
+              minDist = dist;
+              closestDefender = e;
+            }
+          }
+        });
+
+        if (closestDefender) {
+          this.targetUnit = closestDefender;
+        } else if (distToPlayer < this.visionRange && !player.isDead) {
+          this.targetUnit = player;
+        }
       }
     }
 
@@ -462,61 +506,87 @@ export class Enemy {
           }
         }
       } else {
-        // Check if hostile unit should assault a player-secured or neutral outpost base
-        let assaultBase: { x: number, y: number, radius: number } | null = null;
+        // Hostile mech has no target unit
+        if (this.isGuard) {
+          // Guard return home/patrol behavior: do NOT assault other bases, stay at patrolX, patrolY!
+          const homeDx = this.patrolX - this.x;
+          const homeDy = this.patrolY - this.y;
+          const homeDist = Math.sqrt(homeDx*homeDx + homeDy*homeDy);
 
-        if (!this.isFriendly && this.type !== 'TURRET') {
-          let minBaseDist = Infinity;
-          basesManager.bases.forEach(b => {
-            if (b.faction !== 'ENEMY') { // target PLAYER and NEUTRAL bases
-              const dx = b.x - this.x;
-              const dy = b.y - this.y;
-              const dist = Math.sqrt(dx*dx + dy*dy);
-              if (dist < minBaseDist) {
-                minBaseDist = dist;
-                assaultBase = b;
-              }
-            }
-          });
-        }
-
-        if (assaultBase) {
-          // Assault Base pathing
-          const base: { x: number, y: number, radius: number } = assaultBase;
-          const dx = base.x - this.x;
-          const dy = base.y - this.y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-
-          if (dist > base.radius - 30) {
-            // Outside base capture ring: steer directly to the flag
-            steerX = dx / dist;
-            steerY = dy / dist;
+          if (homeDist > 40) {
+            // Return home
+            steerX = homeDx / homeDist;
+            steerY = homeDy / homeDist;
           } else {
-            // Inside base: patrol/stand inside the flag area to capture
-            this.patrolAngle += 0.01 * (dt / 16.66);
-            const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
-            const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
-
-            const tdx = targetX - this.x;
-            const tdy = targetY - this.y;
-            const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
-            if (tDist > 8) {
-              steerX = tdx / tDist;
-              steerY = tdy / tDist;
+            // Patrol around patrol point
+            this.patrolAngle += 0.015 * (dt / 16.66);
+            const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
+            const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+            const pdx = targetPatrolX - this.x;
+            const pdy = targetPatrolY - this.y;
+            const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+            if (pdist > 10) {
+              steerX = pdx / pdist;
+              steerY = pdy / pdist;
             }
           }
         } else {
-          // Standard patrol behavior: wander around original coordinate in circles
-          this.patrolAngle += 0.015 * (dt / 16.66);
-          const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
-          const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+          // Check if hostile unit should assault a player-secured or neutral outpost base
+          let assaultBase: { x: number, y: number, radius: number } | null = null;
 
-          const dx = targetPatrolX - this.x;
-          const dy = targetPatrolY - this.y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist > 10) {
-            steerX = dx / dist;
-            steerY = dy / dist;
+          if (!this.isFriendly && this.type !== 'TURRET') {
+            let minBaseDist = Infinity;
+            basesManager.bases.forEach(b => {
+              if (b.faction !== 'ENEMY') { // target PLAYER and NEUTRAL bases
+                const dx = b.x - this.x;
+                const dy = b.y - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < minBaseDist) {
+                  minBaseDist = dist;
+                  assaultBase = b;
+                }
+              }
+            });
+          }
+
+          if (assaultBase) {
+            // Assault Base pathing
+            const base: { x: number, y: number, radius: number } = assaultBase;
+            const dx = base.x - this.x;
+            const dy = base.y - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+
+            if (dist > base.radius - 30) {
+              // Outside base capture ring: steer directly to the flag
+              steerX = dx / dist;
+              steerY = dy / dist;
+            } else {
+              // Inside base: patrol/stand inside the flag area to capture
+              this.patrolAngle += 0.01 * (dt / 16.66);
+              const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
+              const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
+
+              const tdx = targetX - this.x;
+              const tdy = targetY - this.y;
+              const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
+              if (tDist > 8) {
+                steerX = tdx / tDist;
+                steerY = tdy / tDist;
+              }
+            }
+          } else {
+            // Standard patrol behavior: wander around original coordinate in circles
+            this.patrolAngle += 0.015 * (dt / 16.66);
+            const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
+            const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+
+            const dx = targetPatrolX - this.x;
+            const dy = targetPatrolY - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 10) {
+              steerX = dx / dist;
+              steerY = dy / dist;
+            }
           }
         }
       }
@@ -1108,29 +1178,29 @@ export class EnemiesManager {
     
     // Spawn initial guards around bases
     // Base Alpha (ENEMY, 2048, 512): Spawn turrets and drones
-    this.spawnEnemy(2048 - 60, 512, 'TURRET');
-    this.spawnEnemy(2048 + 60, 512, 'TURRET');
-    this.spawnEnemy(1950, 420, 'DRONE');
-    this.spawnEnemy(2120, 580, 'MECH');
+    this.spawnEnemy(2048 - 60, 512, 'TURRET', true);
+    this.spawnEnemy(2048 + 60, 512, 'TURRET', true);
+    this.spawnEnemy(1950, 420, 'DRONE', true);
+    this.spawnEnemy(2120, 580, 'MECH', true);
 
     // Base Beta (NEUTRAL, 512, 2048): Spawn a couple neutral drones
-    this.spawnEnemy(512 - 70, 2048 + 50, 'DRONE');
-    this.spawnEnemy(512 + 70, 2048 - 50, 'DRONE');
+    this.spawnEnemy(512 - 70, 2048 + 50, 'DRONE', true);
+    this.spawnEnemy(512 + 70, 2048 - 50, 'DRONE', true);
 
     // Base Gamma (NEUTRAL, 1280, 1280): Spawns heavy defense
-    this.spawnEnemy(1280, 1280 - 60, 'TURRET');
-    this.spawnEnemy(1280 - 100, 1280 + 50, 'DRONE');
-    this.spawnEnemy(1280 + 100, 1280 + 50, 'DRONE');
-    this.spawnEnemy(1280, 1340, 'MECH');
+    this.spawnEnemy(1280, 1280 - 60, 'TURRET', true);
+    this.spawnEnemy(1280 - 100, 1280 + 50, 'DRONE', true);
+    this.spawnEnemy(1280 + 100, 1280 + 50, 'DRONE', true);
+    this.spawnEnemy(1280, 1340, 'MECH', true);
 
     // Base Delta (ENEMY, 2048, 2048)
-    this.spawnEnemy(2048 - 60, 2048, 'TURRET');
-    this.spawnEnemy(2048, 2048 + 60, 'TURRET');
-    this.spawnEnemy(2040, 1960, 'MECH');
+    this.spawnEnemy(2048 - 60, 2048, 'TURRET', true);
+    this.spawnEnemy(2048, 2048 + 60, 'TURRET', true);
+    this.spawnEnemy(2040, 1960, 'MECH', true);
   }
 
-  spawnEnemy(x: number, y: number, type: EnemyType) {
-    this.enemies.push(new Enemy(x, y, type, false));
+  spawnEnemy(x: number, y: number, type: EnemyType, isGuard: boolean = false) {
+    this.enemies.push(new Enemy(x, y, type, false, isGuard));
   }
 
   spawnDefender(x: number, y: number) {
