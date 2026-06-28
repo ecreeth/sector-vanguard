@@ -11,6 +11,10 @@ export interface Projectile {
   radius: number;
   color: string;
   life: number; // time to live in ms
+  bouncesLeft?: number;
+  pierceLeft?: number;
+  plasmaBurnLvl?: number;
+  hitTargets?: any[];
 }
 
 export interface Particle {
@@ -24,11 +28,45 @@ export interface Particle {
   maxLife: number; // max life in ms
 }
 
+export interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
+export interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  life: number;
+  maxLife: number;
+  vy: number;
+}
+
 export class ProjectilesManager {
   projectiles: Projectile[] = [];
   particles: Particle[] = [];
+  shockwaves: Shockwave[] = [];
+  floatingTexts: FloatingText[] = [];
 
-  spawnBullet(x: number, y: number, angle: number, speed: number, damage: number, isPlayer: boolean, color: string = '#00f2fe', radius: number = 4) {
+  spawnBullet(
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    damage: number,
+    isPlayer: boolean,
+    color: string = '#00f2fe',
+    radius: number = 4,
+    bouncesLeft: number = 0,
+    pierceLeft: number = 0,
+    plasmaBurnLvl: number = 0
+  ) {
     this.projectiles.push({
       x,
       y,
@@ -38,12 +76,25 @@ export class ProjectilesManager {
       isPlayer,
       radius,
       color,
-      life: 2000 // 2 seconds lifespan
+      life: 2000, // 2 seconds lifespan
+      bouncesLeft,
+      pierceLeft,
+      plasmaBurnLvl,
+      hitTargets: []
     });
   }
 
   // Spawn scatter shotgun pellets (5 pellets in a spread angle)
-  spawnShotgun(x: number, y: number, angle: number, damage: number, isPlayer: boolean) {
+  spawnShotgun(
+    x: number,
+    y: number,
+    angle: number,
+    damage: number,
+    isPlayer: boolean,
+    bouncesLeft: number = 0,
+    pierceLeft: number = 0,
+    plasmaBurnLvl: number = 0
+  ) {
     const pelletsCount = 5;
     const spreadAngle = 0.25; // spread range in radians (~15 degrees)
     
@@ -51,8 +102,32 @@ export class ProjectilesManager {
       // Linear interpolation of spread angles
       const offset = (i - (pelletsCount - 1) / 2) * (spreadAngle / (pelletsCount - 1));
       const speed = 12 + Math.random() * 4; // slight speed variation
-      this.spawnBullet(x, y, angle + offset, speed, damage, isPlayer, '#ffe600', 3.5);
+      this.spawnBullet(x, y, angle + offset, speed, damage, isPlayer, '#ffe600', 3.5, bouncesLeft, pierceLeft, plasmaBurnLvl);
     }
+  }
+
+  spawnShockwave(x: number, y: number, maxRadius: number, color: string = '#00f2fe', duration: number = 400) {
+    this.shockwaves.push({
+      x,
+      y,
+      radius: 0,
+      maxRadius,
+      life: duration,
+      maxLife: duration,
+      color
+    });
+  }
+
+  spawnText(x: number, y: number, text: string, color: string = '#ffd700') {
+    this.floatingTexts.push({
+      x,
+      y,
+      text,
+      color,
+      life: 800,
+      maxLife: 800,
+      vy: -1.2
+    });
   }
 
   // Spawn particle explosions
@@ -169,9 +244,30 @@ export class ProjectilesManager {
 
       // Check wall collision
       if (map.collides(nextX, nextY, proj.radius)) {
-        this.spawnSparks(proj.x, proj.y, proj.color, 6);
-        this.projectiles.splice(i, 1);
-        continue;
+        if (proj.bouncesLeft && proj.bouncesLeft > 0) {
+          proj.bouncesLeft--;
+          
+          const collidesX = map.collides(nextX, proj.y, proj.radius);
+          const collidesY = map.collides(proj.x, nextY, proj.radius);
+          if (collidesX) {
+            proj.vx = -proj.vx;
+          }
+          if (collidesY) {
+            proj.vy = -proj.vy;
+          }
+          if (!collidesX && !collidesY) {
+            proj.vx = -proj.vx;
+            proj.vy = -proj.vy;
+          }
+          this.spawnSparks(proj.x, proj.y, proj.color, 4);
+          proj.x += proj.vx * 0.5;
+          proj.y += proj.vy * 0.5;
+          continue;
+        } else {
+          this.spawnSparks(proj.x, proj.y, proj.color, 6);
+          this.projectiles.splice(i, 1);
+          continue;
+        }
       }
 
       proj.x = nextX;
@@ -198,10 +294,31 @@ export class ProjectilesManager {
           const minDist = proj.radius + target.radius;
 
           if (distSq < minDist * minDist) {
+            // Pierce check: ignore if already hit
+            if (proj.hitTargets && proj.hitTargets.includes(target)) {
+              continue;
+            }
+            proj.hitTargets?.push(target);
+
             target.takeDamage(proj.damage);
             this.spawnSparks(proj.x, proj.y, proj.isPlayer ? '#ffe600' : '#ff0055', 8);
-            hit = true;
-            break;
+
+            // Floating text display
+            this.spawnText(target.x, target.y - 12, `-${proj.damage}`, proj.isPlayer ? '#ffe600' : '#ff3355');
+
+            // Apply plasma burn DoT status on enemies
+            if (proj.isPlayer && proj.plasmaBurnLvl && proj.plasmaBurnLvl > 0) {
+              if ('applyPlasmaBurn' in target) {
+                (target as any).applyPlasmaBurn(proj.plasmaBurnLvl);
+              }
+            }
+
+            if (proj.pierceLeft && proj.pierceLeft > 0) {
+              proj.pierceLeft--;
+            } else {
+              hit = true;
+              break;
+            }
           }
         }
       }
@@ -223,9 +340,51 @@ export class ProjectilesManager {
         this.particles.splice(i, 1);
       }
     }
+
+    // 3. Update Shockwaves
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.life -= dt;
+      const progress = 1 - (sw.life / sw.maxLife);
+      sw.radius = sw.maxRadius * progress;
+      if (sw.life <= 0) {
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
+    // 4. Update Floating Texts
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.life -= dt;
+      ft.y += ft.vy * (dt / 16.66);
+      if (ft.life <= 0) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
+    // Draw shockwaves
+    this.shockwaves.forEach(sw => {
+      const alpha = sw.life / sw.maxLife;
+      ctx.save();
+      ctx.strokeStyle = sw.color;
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(sw.x - cameraX, sw.y - cameraY, sw.radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner faint ring
+      ctx.strokeStyle = sw.color;
+      ctx.globalAlpha = alpha * 0.15;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(sw.x - cameraX, sw.y - cameraY, sw.radius * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
+
     // Draw particles
     this.particles.forEach(part => {
       const alpha = part.life / part.maxLife;
@@ -256,6 +415,20 @@ export class ProjectilesManager {
 
       // Reset shadow blur
       ctx.shadowBlur = 0;
+    });
+
+    // Draw floating texts
+    this.floatingTexts.forEach(ft => {
+      const alpha = ft.life / ft.maxLife;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = ft.color;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 4;
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.text, ft.x - cameraX, ft.y - cameraY);
+      ctx.restore();
     });
   }
 }

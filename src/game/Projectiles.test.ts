@@ -22,6 +22,8 @@ describe('ProjectilesManager & Particle System', () => {
   beforeEach(() => {
     projectilesManager.projectiles = [];
     projectilesManager.particles = [];
+    projectilesManager.shockwaves = [];
+    projectilesManager.floatingTexts = [];
   });
 
   it('should spawn single bullet with proper attributes', () => {
@@ -148,5 +150,71 @@ describe('ProjectilesManager & Particle System', () => {
     // Barrel should be dead (since HP 10 <= damage 15)
     expect(map.barrels[0].isDead).toBe(true);
     expect(projectilesManager.projectiles.length).toBe(0); // bullet consumed
+  });
+
+  it('should bounce bullet off walls when bouncesLeft > 0', () => {
+    const map = new GameMap('FOREST');
+    // Force a wall block at tile (2, 2)
+    map.tiles[2][2] = 'WALL';
+    const wallX = 2 * map.tileSize + map.tileSize / 2;
+    const wallY = 2 * map.tileSize + map.tileSize / 2;
+
+    // Spawn a bullet moving directly towards the wall from the left with bouncesLeft = 1
+    projectilesManager.spawnBullet(wallX - 10, wallY, 0, 10, 10, true, '#fff', 4, 1);
+    
+    projectilesManager.update(16, map, []);
+
+    // Bullet should still exist, bouncesLeft decremented to 0, vx inverted
+    expect(projectilesManager.projectiles.length).toBe(1);
+    const bullet = projectilesManager.projectiles[0];
+    expect(bullet.bouncesLeft).toBe(0);
+    expect(bullet.vx).toBeLessThan(0); // bounced back to the left!
+  });
+
+  it('should pierce multiple enemies when pierceLeft > 0', () => {
+    const map = new GameMap('FOREST');
+    // Set target zone as visible to player (2). Targets are at (100, 100) -> tile (1, 1)
+    map.visibility[1][1] = 2;
+
+    let target1Damage = 0;
+    let target2Damage = 0;
+
+    const t1 = {
+      x: 100,
+      y: 100,
+      radius: 15,
+      takeDamage: (dmg: number) => { target1Damage += dmg; },
+      isPlayer: false
+    };
+
+    const t2 = {
+      x: 120,
+      y: 100,
+      radius: 15,
+      takeDamage: (dmg: number) => { target2Damage += dmg; },
+      isPlayer: false
+    };
+
+    // Spawn bullet at (80, 100) moving right with pierceLeft = 1
+    projectilesManager.spawnBullet(80, 100, 0, 20, 15, true, '#fff', 4, 0, 1);
+    
+    // Update to hit first target
+    projectilesManager.update(16, map, [t1, t2]);
+    expect(target1Damage).toBe(15);
+    expect(projectilesManager.projectiles.length).toBe(1); // bullet survives hit 1!
+    expect(projectilesManager.projectiles[0].pierceLeft).toBe(0);
+
+    // Update to hit second target
+    projectilesManager.update(16, map, [t1, t2]);
+    expect(target2Damage).toBe(15);
+    expect(projectilesManager.projectiles.length).toBe(0); // bullet consumed on hit 2
+  });
+
+  it('should spawn shockwaves and floating text particles', () => {
+    projectilesManager.spawnShockwave(100, 100, 150, '#00f2fe', 400);
+    expect(projectilesManager.shockwaves.length).toBe(1);
+    
+    projectilesManager.spawnText(100, 100, 'BLOCKED', '#00f2fe');
+    expect(projectilesManager.floatingTexts.length).toBe(1);
   });
 });

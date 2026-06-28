@@ -72,6 +72,12 @@ export class Player {
   shieldLvl: number = 0;
   dashLvl: number = 0;
 
+  ricochetLvl: number = 0;
+  pierceLvl: number = 0;
+  plasmaBurnLvl: number = 0;
+  damageFlash: number = 0;
+  dashTrails: Array<{ x: number; y: number; life: number }> = [];
+
   empCooldown: number = 0;
   airstrikeCooldown: number = 0;
   droneCooldown: number = 0;
@@ -122,6 +128,7 @@ export class Player {
     
     // Trigger screen shake on damage hit
     this.triggerScreenShake(amount * 0.35);
+    this.damageFlash = 250;
 
     // Reset shield regeneration delay
     this.shieldRegenTimer = 4000; // 4 seconds delay before regen starts
@@ -226,6 +233,10 @@ export class Player {
       this.screenShake = Math.max(0, this.screenShake - (dt * 0.03));
     }
 
+    if (this.damageFlash > 0) {
+      this.damageFlash = Math.max(0, this.damageFlash - dt);
+    }
+
     // Repair drone healing ticks
     if (this.repairDroneDuration > 0) {
       this.repairDroneDuration = Math.max(0, this.repairDroneDuration - dt);
@@ -243,6 +254,7 @@ export class Player {
         exp.exploded = true;
         sound.playExplosion();
         this.triggerScreenShake(8);
+        projectilesManager.spawnShockwave(exp.x, exp.y, exp.radius, '#ff5500', 400);
 
         // Damage enemies in target radius
         enemiesManager.enemies.forEach(e => {
@@ -276,6 +288,7 @@ export class Player {
     if (this.dashDuration > 0) {
       // Dashing - move at high speed, ignore slow terrains, but still collide with walls
       this.dashDuration = Math.max(0, this.dashDuration - dt);
+      this.dashTrails.push({ x: this.x, y: this.y, life: 200 });
       
       const stepX = this.dashDirX * this.dashSpeed;
       const stepY = this.dashDirY * this.dashSpeed;
@@ -312,6 +325,9 @@ export class Player {
         }
       }
     }
+
+    this.dashTrails.forEach(t => t.life -= dt);
+    this.dashTrails = this.dashTrails.filter(t => t.life > 0);
   }
 
   // Get formatted stats to pass to React HUD
@@ -352,7 +368,13 @@ export class Player {
         dashLvl: this.dashLvl,
         healthCost: this.healthLvl < 4 ? 120 + this.healthLvl * 60 : 0,
         shieldCost: this.shieldLvl < 4 ? 100 + this.shieldLvl * 50 : 0,
-        dashCost: this.dashLvl < 4 ? 150 + this.dashLvl * 75 : 0
+        dashCost: this.dashLvl < 4 ? 150 + this.dashLvl * 75 : 0,
+        ricochetLvl: this.ricochetLvl,
+        pierceLvl: this.pierceLvl,
+        plasmaBurnLvl: this.plasmaBurnLvl,
+        ricochetCost: this.ricochetLvl < 2 ? 150 + this.ricochetLvl * 100 : 0,
+        pierceCost: this.pierceLvl < 2 ? 180 + this.pierceLvl * 120 : 0,
+        plasmaBurnCost: this.plasmaBurnLvl < 2 ? 200 + this.plasmaBurnLvl * 100 : 0
       },
       bossActive: !!boss,
       bossHp: boss ? Math.ceil(boss.hp) : 0,
@@ -422,13 +444,13 @@ export class Player {
     const screenX = this.x - cameraX;
     const screenY = this.y - cameraY;
 
-    // Draw dash trail if dashing
-    if (this.dashDuration > 0) {
-      ctx.fillStyle = 'rgba(0, 242, 254, 0.25)';
+    // Draw fading thruster trails
+    this.dashTrails.forEach(t => {
+      ctx.fillStyle = `rgba(0, 242, 254, ${(t.life / 200) * 0.22})`;
       ctx.beginPath();
-      ctx.arc(screenX - this.dashDirX * 15, screenY - this.dashDirY * 15, this.radius - 2, 0, Math.PI * 2);
+      ctx.arc(t.x - cameraX, t.y - cameraY, this.radius - 2, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
 
     // Outer Glow / Shield Ring
     if (this.shield > 0) {
@@ -472,6 +494,8 @@ export class Player {
     this.credits -= this.empCost;
     this.empCooldown = this.empMaxCooldown;
     sound.playShieldRegen(); // synth a nice rising sweep charger
+
+    projectilesManager.spawnShockwave(this.x, this.y, 240, '#00f2fe', 600);
 
     // Stun enemies in a 240px circle
     enemiesManager.enemies.forEach(e => {
@@ -542,7 +566,7 @@ export class Player {
     return true;
   }
 
-  buyUpgrade(type: 'HEALTH' | 'SHIELD' | 'DASH'): boolean {
+  buyUpgrade(type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN'): boolean {
     if (this.isDead) return false;
 
     if (type === 'HEALTH' && this.healthLvl < 4) {
@@ -571,6 +595,30 @@ export class Player {
         this.credits -= cost;
         this.dashLvl++;
         this.dashMaxCooldown = Math.max(650, 1500 - this.dashLvl * 220); // 1500 -> 1280 -> 1060 -> 840 -> 650
+        sound.playPurchase();
+        return true;
+      }
+    } else if (type === 'RICOCHET' && this.ricochetLvl < 2) {
+      const cost = 150 + this.ricochetLvl * 100;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.ricochetLvl++;
+        sound.playPurchase();
+        return true;
+      }
+    } else if (type === 'PIERCE' && this.pierceLvl < 2) {
+      const cost = 180 + this.pierceLvl * 120;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.pierceLvl++;
+        sound.playPurchase();
+        return true;
+      }
+    } else if (type === 'PLASMA_BURN' && this.plasmaBurnLvl < 2) {
+      const cost = 200 + this.plasmaBurnLvl * 100;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.plasmaBurnLvl++;
         sound.playPurchase();
         return true;
       }

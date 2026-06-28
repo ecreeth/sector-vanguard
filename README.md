@@ -32,6 +32,10 @@
   - Kinetic front energy shield blocking **60% of all incoming damage** when HP falls below 50%.
   - Spawns support drone squads when crossing HP thresholds (600, 400, and 200 HP).
 
+### 5. Advanced Enemy Types
+- **Shield Mech**: Frontal protection plate blocks 100% of damage incoming from its front arc, spawning deflection sparks and "BLOCKED" combat indicators. Flank them or deploy decoy units to expose their vulnerable rear chassis.
+- **Portal Rifts**: Stationary portals spawning aggressive Drone and Suicide Drone patrol squads every 5 seconds.
+
 ---
 
 ## 🛠️ Upgrades, Armory & Base Defenses
@@ -40,7 +44,10 @@
 Purchase upgrades from the terminal overlay in the left HUD panel:
 - **Max Health**: Increases HP maximum (+25 HP per tier, capped at Tier 4).
 - **Shield Matrix**: Increases max shield buffer capacity (+25 Shield per tier, capped at Tier 4).
-- **Dash CDR**: Enhances thruster cooldown decay rates.
+- **Dash CDR**: Enhances thruster cooldown decay rates (capped at Tier 4).
+- **Ricochet Mod**: Projectiles bounce off wall boundaries (Max level 2).
+- **Pierce Mod**: Projectiles penetrate multiple target hostiles (Max level 2).
+- **Plasma Burn DoT**: Projectiles inflict thermal damage over time ticks on hit (Max level 2).
 
 ### Weapons Shop & Armory
 Cycle through unlocked weapons using the **`[Q]`** key:
@@ -100,4 +107,4 @@ npm run build
 # Execute the Vitest unit/integration test suite
 npm test
 ```
-The test suite consists of **39 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, and biome hazards.
+The test suite consists of **57 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, biome hazards, wall-bound ricochet bounces, pierce penetrations, Shield Mech frontal block angle sectors, spawning portals, and plasma burn DoTs.

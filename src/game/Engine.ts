@@ -273,7 +273,10 @@ export class GameEngine {
               bulletSpawnY,
               this.player.angle,
               weapon.damage,
-              true
+              true,
+              this.player.ricochetLvl,
+              this.player.pierceLvl,
+              this.player.plasmaBurnLvl
             );
           } else if (this.player.currentWeaponType === 'PLASMA_RIFLE') {
             // Rapid Plasma Repeater fires slightly larger glowing projectlies
@@ -285,7 +288,10 @@ export class GameEngine {
               weapon.damage,
               true,
               '#00f2fe',
-              5
+              5,
+              this.player.ricochetLvl,
+              this.player.pierceLvl,
+              this.player.plasmaBurnLvl
             );
           } else {
             // Laser Pistol
@@ -297,7 +303,10 @@ export class GameEngine {
               weapon.damage,
               true,
               '#39ff14',
-              3.5
+              3.5,
+              this.player.ricochetLvl,
+              this.player.pierceLvl,
+              this.player.plasmaBurnLvl
             );
           }
         }
@@ -503,6 +512,16 @@ export class GameEngine {
     }
 
     this.ctx.restore(); // restore screenshake translate
+
+    // 6.8 Draw Screen Edge Red Flash Overlay on damage hit
+    if (this.player && this.player.damageFlash > 0) {
+      const alpha = (this.player.damageFlash / 250) * 0.22;
+      this.ctx.save();
+      this.ctx.strokeStyle = `rgba(255, 0, 85, ${alpha})`;
+      this.ctx.lineWidth = 14;
+      this.ctx.strokeRect(0, 0, this.screenWidth, this.screenHeight);
+      this.ctx.restore();
+    }
 
     // 7. Draw Tactical Satellite Radar Minimap
     this.drawRadarMinimap();

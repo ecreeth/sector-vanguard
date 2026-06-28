@@ -19,7 +19,7 @@ interface HUDProps {
   onToggleCrt: () => void;
   onPause: () => void;
   onQuit: () => void;
-  onBuyUpgrade: (type: 'HEALTH' | 'SHIELD' | 'DASH') => void;
+  onBuyUpgrade: (type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN') => void;
   onBuildTurret: () => void;
 }
 
@@ -199,18 +199,21 @@ export const HUD: React.FC<HUDProps> = ({
               COMMAND TERMINAL
             </div>
             {([
-              { type: 'HEALTH' as const, label: 'MAX HP', lvl: upgrades.healthLvl, cost: upgrades.healthCost, color: 'var(--neon-red)' },
-              { type: 'SHIELD' as const, label: 'MAX SHIELD', lvl: upgrades.shieldLvl, cost: upgrades.shieldCost, color: 'var(--neon-cyan)' },
-              { type: 'DASH' as const, label: 'DASH CDR', lvl: upgrades.dashLvl, cost: upgrades.dashCost, color: 'var(--neon-green)' }
+              { type: 'HEALTH' as const, label: 'MAX HP', lvl: upgrades.healthLvl, cost: upgrades.healthCost, color: 'var(--neon-red)', max: 4 },
+              { type: 'SHIELD' as const, label: 'MAX SHIELD', lvl: upgrades.shieldLvl, cost: upgrades.shieldCost, color: 'var(--neon-cyan)', max: 4 },
+              { type: 'DASH' as const, label: 'DASH CDR', lvl: upgrades.dashLvl, cost: upgrades.dashCost, color: 'var(--neon-green)', max: 4 },
+              { type: 'RICOCHET' as const, label: 'RICOCHET MOD', lvl: upgrades.ricochetLvl, cost: upgrades.ricochetCost, color: '#c084fc', max: 2 },
+              { type: 'PIERCE' as const, label: 'PIERCE MOD', lvl: upgrades.pierceLvl, cost: upgrades.pierceCost, color: '#ffb703', max: 2 },
+              { type: 'PLASMA_BURN' as const, label: 'PLASMA BURN DoT', lvl: upgrades.plasmaBurnLvl, cost: upgrades.plasmaBurnCost, color: '#f97316', max: 2 }
             ]).map(u => (
               <div key={u.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: '11px', color: u.color, fontWeight: 'bold' }}>{u.label}</span>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {'▰'.repeat(u.lvl)}{'▱'.repeat(4 - u.lvl)}
+                    {'▰'.repeat(u.lvl)}{'▱'.repeat(u.max - u.lvl)}
                   </span>
                 </div>
-                {u.lvl < 4 ? (
+                {u.lvl < u.max ? (
                   <button
                     onClick={() => onBuyUpgrade(u.type)}
                     disabled={credits < u.cost}

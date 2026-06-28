@@ -138,4 +138,50 @@ describe('Enemy Types and AI Behaviors', () => {
     // vx should be positive towards player (200, 100)
     expect(defender.vx).toBeGreaterThan(0);
   });
+
+  it('should block all damage to Shield Mech when hit from the front and bypass when hit from behind', () => {
+    const shieldMech = new Enemy(100, 100, 'SHIELD_MECH', false);
+    // Facing player (facing to the right towards player at 150, 100)
+    shieldMech.vx = 1;
+    shieldMech.vy = 0;
+    
+    // 1. Hit from the front (where player is)
+    enemiesManager.playerRef = { x: 150, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+    shieldMech.takeDamage(30);
+    expect(shieldMech.hp).toBe(100); // blocked!
+
+    // 2. Hit from behind (player at 50, 100)
+    enemiesManager.playerRef = { x: 50, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+    shieldMech.takeDamage(30);
+    expect(shieldMech.hp).toBe(70); // damaged!
+  });
+
+  it('should periodically spawn drones/suicides from active portals', () => {
+    const portal = new Enemy(100, 100, 'PORTAL', false);
+    const map = new GameMap('FOREST');
+    const player = { x: 100, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+
+    enemiesManager.enemies = [portal];
+    
+    // Portal spawn timer builds up
+    portal.update(5000, map, player, []);
+
+    // Portal spawning drone/suicide should insert it into enemiesManager list
+    expect(enemiesManager.enemies.length).toBe(2);
+    expect(enemiesManager.enemies[1].type).toMatch(/DRONE|SUICIDE/);
+  });
+
+  it('should apply plasma flame DoT burn ticks to hostiles', () => {
+    const drone = new Enemy(100, 100, 'DRONE', false);
+    const map = new GameMap('FOREST');
+    const player = { x: 100, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+
+    drone.applyPlasmaBurn(2); // level 2 = 8 damage per tick
+    expect(drone.plasmaBurnTicks).toBe(6);
+
+    // Update with 500ms step to trigger first burn tick
+    drone.update(500, map, player, []);
+    expect(drone.hp).toBe(drone.maxHp - 8);
+    expect(drone.plasmaBurnTicks).toBe(5);
+  });
 });

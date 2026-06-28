@@ -4,7 +4,7 @@ import { sound } from './Sound';
 import { basesManager } from './Bases';
 import { lootManager } from './Loot';
 
-export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER' | 'BOSS' | 'SUICIDE' | 'SNIPER' | 'DECOY';
+export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER' | 'BOSS' | 'SUICIDE' | 'SNIPER' | 'DECOY' | 'SHIELD_MECH' | 'PORTAL';
 
 export class Enemy {
   x: number;
@@ -40,6 +40,18 @@ export class Enemy {
   life: number = 0; // lifespan for temporary entities (Decoy)
   warningLaserActive: boolean = false; // for sniper telegraphing
   detonated: boolean = false; // for suicide drone explosion safety check
+
+  portalSpawnTimer: number = 0;
+  plasmaBurnLvl: number = 0;
+  plasmaBurnTicks: number = 0;
+  plasmaBurnTimer: number = 0;
+
+  applyPlasmaBurn(level: number) {
+    if (this.isDead) return;
+    this.plasmaBurnLvl = Math.max(this.plasmaBurnLvl, level);
+    this.plasmaBurnTicks = 6; // ticks 6 times
+    this.plasmaBurnTimer = 500; // every 500ms
+  }
 
   constructor(x: number, y: number, type: EnemyType, isFriendly: boolean) {
     this.x = x;
@@ -125,11 +137,48 @@ export class Enemy {
         this.visionRange = 0;
         this.life = 6000; // lasts 6 seconds
         break;
+      case 'SHIELD_MECH':
+        this.radius = 16;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.speed = 1.2;
+        this.shootDelay = 1200;
+        this.damage = 10;
+        this.visionRange = 220;
+        break;
+      case 'PORTAL':
+        this.radius = 24;
+        this.hp = 160;
+        this.maxHp = 160;
+        this.speed = 0;
+        this.shootDelay = Infinity;
+        this.damage = 0;
+        this.visionRange = 0;
+        break;
     }
   }
 
   takeDamage(amount: number) {
     if (this.isDead) return;
+
+    if (this.type === 'SHIELD_MECH') {
+      const player = enemiesManager.playerRef;
+      if (player) {
+        const facingAngle = this.targetUnit ? Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x) : Math.atan2(this.vy, this.vx);
+        const toPlayerAngle = Math.atan2(player.y - this.y, player.x - this.x);
+        
+        let diff = toPlayerAngle - facingAngle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        
+        if (Math.abs(diff) < Math.PI / 2) {
+          // Hit from front! Block damage completely!
+          projectilesManager.spawnSparks(this.x + Math.cos(facingAngle) * 18, this.y + Math.sin(facingAngle) * 18, '#00f2fe', 4);
+          projectilesManager.spawnText(this.x, this.y - 15, 'BLOCKED', '#00f2fe');
+          return;
+        }
+      }
+    }
 
     // Boss shield mechanic: absorbs 60% of damage when below 50% HP (400 HP)
     if (this.type === 'BOSS' && this.hp < 400) {
@@ -230,6 +279,41 @@ export class Enemy {
     otherEnemies: Enemy[]
   ) {
     if (this.isDead) return;
+
+    // Handle Plasma Burn ticks
+    if (this.plasmaBurnTicks > 0) {
+      this.plasmaBurnTimer -= dt;
+      if (this.plasmaBurnTimer <= 0) {
+        this.plasmaBurnTimer = 500;
+        this.plasmaBurnTicks--;
+        const burnDamage = this.plasmaBurnLvl * 4;
+        this.hp = Math.max(0, this.hp - burnDamage);
+        projectilesManager.spawnSparks(this.x, this.y, '#f97316', 3);
+        projectilesManager.spawnText(this.x, this.y - 12, `-${burnDamage}`, '#f97316');
+        
+        if (this.hp <= 0 && !this.isDead) {
+          this.isDead = true;
+          sound.playExplosion();
+          projectilesManager.spawnExplosionParticles(this.x, this.y, this.radius + 15);
+          return;
+        }
+      }
+    }
+
+    if (this.type === 'PORTAL') {
+      this.portalSpawnTimer += dt;
+      if (this.portalSpawnTimer >= 5000) {
+        this.portalSpawnTimer = 0;
+        const spawnType = Math.random() > 0.5 ? 'SUICIDE' : 'DRONE';
+        const offsetAngle = Math.random() * Math.PI * 2;
+        const sx = this.x + Math.cos(offsetAngle) * 32;
+        const sy = this.y + Math.sin(offsetAngle) * 32;
+        enemiesManager.spawnEnemy(sx, sy, spawnType);
+        projectilesManager.spawnSparks(this.x, this.y, '#c084fc', 8);
+        projectilesManager.spawnShockwave(this.x, this.y, 45, '#c084fc', 300);
+      }
+      return; // Portals don't move or execute further standard AI updates
+    }
 
     if (this.type === 'DECOY') {
       this.life -= dt;
@@ -868,6 +952,58 @@ export class Enemy {
         ctx.stroke();
         break;
 
+      case 'SHIELD_MECH':
+        // Heavy blocky chassis
+        ctx.fillStyle = '#475569';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 2.5;
+        ctx.fillRect(screenX - 16, screenY - 16, 32, 32);
+        ctx.strokeRect(screenX - 16, screenY - 16, 32, 32);
+
+        // Facing angle
+        let shieldMechAngle = Math.atan2(this.vy, this.vx) || 0;
+        if (this.targetUnit) {
+          shieldMechAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
+        }
+
+        // Draw thick front glowing shield plate
+        ctx.strokeStyle = '#00f2fe';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.radius + 8, shieldMechAngle - Math.PI / 3, shieldMechAngle + Math.PI / 3);
+        ctx.stroke();
+
+        // Glowing red eye visor
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(screenX + Math.cos(shieldMechAngle) * 8, screenY + Math.sin(shieldMechAngle) * 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case 'PORTAL':
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 3;
+        // outer ring
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.radius + Math.sin(Date.now() / 100) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // inner swirling core
+        ctx.fillStyle = 'rgba(192, 132, 252, 0.2)';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.radius - 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // rotating central vortex line
+        const vortexAngle = Date.now() / 200;
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screenX + Math.cos(vortexAngle) * (this.radius - 6), screenY + Math.sin(vortexAngle) * (this.radius - 6));
+        ctx.lineTo(screenX - Math.cos(vortexAngle) * (this.radius - 6), screenY - Math.sin(vortexAngle) * (this.radius - 6));
+        ctx.stroke();
+        break;
+
       case 'BOSS':
         // Big heavy command mech chassis
         ctx.fillStyle = '#0f172a';
@@ -959,6 +1095,7 @@ export class Enemy {
 export class EnemiesManager {
   enemies: Enemy[] = [];
   spawnTimer: number = 0;
+  playerRef: any = null;
 
   constructor() {
     this.reset();
@@ -967,6 +1104,7 @@ export class EnemiesManager {
   reset() {
     this.enemies = [];
     this.spawnTimer = 0;
+    this.playerRef = null;
     
     // Spawn initial guards around bases
     // Base Alpha (ENEMY, 2048, 512): Spawn turrets and drones
@@ -1004,6 +1142,7 @@ export class EnemiesManager {
     map: GameMap,
     player: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean }
   ) {
+    this.playerRef = player;
     // 1. Spawning dynamic aggressive patrols towards bases (every 14 seconds)
     this.spawnTimer += dt;
     if (this.spawnTimer >= 14000) {
@@ -1030,14 +1169,18 @@ export class EnemiesManager {
 
       const r = Math.random();
       let squadType: EnemyType = 'DRONE';
-      if (r < 0.35) {
+      if (r < 0.3) {
         squadType = 'DRONE';
-      } else if (r < 0.6) {
+      } else if (r < 0.5) {
         squadType = 'MECH';
-      } else if (r < 0.8) {
+      } else if (r < 0.65) {
         squadType = 'SUICIDE';
-      } else {
+      } else if (r < 0.8) {
         squadType = 'SNIPER';
+      } else if (r < 0.92) {
+        squadType = 'SHIELD_MECH';
+      } else {
+        squadType = 'PORTAL';
       }
       this.spawnEnemy(sx, sy, squadType);
     }

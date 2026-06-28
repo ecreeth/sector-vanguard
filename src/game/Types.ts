@@ -44,6 +44,12 @@ export interface UpgradeStats {
   healthCost: number;
   shieldCost: number;
   dashCost: number;
+  ricochetLvl: number;
+  pierceLvl: number;
+  plasmaBurnLvl: number;
+  ricochetCost: number;
+  pierceCost: number;
+  plasmaBurnCost: number;
 }
 
 export interface PlayerStats {

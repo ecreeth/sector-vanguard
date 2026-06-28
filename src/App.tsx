@@ -54,7 +54,7 @@ function App() {
     setEngineState(null);
   };
 
-  const handleBuyUpgrade = (type: 'HEALTH' | 'SHIELD' | 'DASH') => {
+  const handleBuyUpgrade = (type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN') => {
     if (engineRef.current) {
       engineRef.current.player.buyUpgrade(type);
     }
