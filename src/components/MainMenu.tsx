@@ -1,5 +1,5 @@
-import React from 'react';
-import { Crosshair, Shield, Zap, CircleAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { Crosshair, Shield, Zap, CircleAlert, X, BookOpen } from 'lucide-react';
 
 interface MainMenuProps {
   onStartGame: (biome: string) => void;
@@ -16,6 +16,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   crtEnabled,
   onToggleCrt
 }) => {
+  const [showManual, setShowManual] = useState(false);
   const biomes = [
     {
       id: 'FOREST',
@@ -120,6 +121,24 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </button>
 
         <button 
+          onClick={() => setShowManual(true)} 
+          className="sci-fi-button"
+          style={{ 
+            fontFamily: 'var(--font-header)', 
+            fontSize: '13px', 
+            padding: '12px 24px', 
+            letterSpacing: '1px',
+            borderColor: 'var(--neon-cyan)',
+            color: 'var(--neon-cyan)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <BookOpen size={16} /> MANUAL
+        </button>
+
+        <button 
           onClick={() => onStartGame(selectedBiome)} 
           style={styles.deployBtn} 
           className="sci-fi-button success"
@@ -127,8 +146,174 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           DEPLOY STRATEGIC COMMANDO
         </button>
       </div>
+
+      {/* Game Manual Modal Overlay */}
+      {showManual && (
+        <div style={manualStyles.modalBg} className="fade-in">
+          <div style={manualStyles.modalCard} className="hud-panel">
+            {/* Modal Header */}
+            <div style={manualStyles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen color="var(--neon-cyan)" size={20} />
+                <span style={manualStyles.modalTitle}>SECTOR VANGUARD FIELDBOOK</span>
+              </div>
+              <button 
+                onClick={() => setShowManual(false)}
+                style={manualStyles.closeBtn}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Content Scroll */}
+            <div style={manualStyles.scrollArea}>
+              {/* Section 1: Tactical Controls */}
+              <div style={manualStyles.section}>
+                <div style={manualStyles.sectionHeader}>1. COMMAND & TACTICAL CONTROLS</div>
+                <ul style={manualStyles.list}>
+                  <li><strong>WASD / Arrow Keys</strong>: Move the commander mech.</li>
+                  <li><strong>Mouse Cursor</strong>: Aim weapon trajectory.</li>
+                  <li><strong>Left-Click</strong>: Fire equipped weapon.</li>
+                  <li><strong>Shift / Spacebar</strong>: Execute Thruster Boost (Dash) to dodge projectiles.</li>
+                  <li><strong>Key [Q]</strong>: Cycle between unlocked armory weapons.</li>
+                  <li><strong>Key [1]</strong>: Release <strong>EMP Blast</strong> (20s Cooldown) to stun hostiles in radius.</li>
+                  <li><strong>Key [2]</strong>: Coordinate <strong>Carpet Airstrike</strong> (25s Cooldown) at cursor world location.</li>
+                  <li><strong>Key [3]</strong>: Deploy <strong>Repair Drone</strong> (15s Cooldown) to heal HP over time.</li>
+                  <li><strong>Key [ESC] / [P]</strong>: Pause active operations.</li>
+                </ul>
+              </div>
+
+              {/* Section 2: HUD Shop & Upgrade Systems */}
+              <div style={manualStyles.section}>
+                <div style={manualStyles.sectionHeader}>2. ARMORY PURCHASES & COMMAND TERMINAL</div>
+                <p style={manualStyles.paragraph}>
+                  Securing outposts generates <strong>Tech Credits (CR)</strong>. Use credits in the HUD panels to unlock upgrades:
+                </p>
+                <ul style={manualStyles.list}>
+                  <li><strong>Weapons Armory</strong>: Purchase/unlock the <strong>Shotgun</strong> (150 CR, fires 5-pellet spreads) or the rapid-fire <strong>Plasma Rifle</strong> (250 CR). If unlocked, buying weapon again refills ammo for 15% cost.</li>
+                  <li><strong>Command Terminal</strong>: Purchase tier upgrades (4 levels max) to boost stats: Max HP (120 CR+), Shield Matrix (100 CR+), and Dash Cooldown decay rate (150 CR+).</li>
+                  <li><strong>Base Turrets</strong>: Click <em>"BUILD BASE TURRET"</em> (200 CR) to place a stationary green laser cannon at the closest player-secured outpost flag.</li>
+                </ul>
+              </div>
+
+              {/* Section 3: Base Capturing & The Overseer Boss */}
+              <div style={manualStyles.section}>
+                <div style={manualStyles.sectionHeader}>3. OUTPOST SECURING & BOSS ENCOUNTER</div>
+                <ul style={manualStyles.list}>
+                  <li><strong>Capturing</strong>: Stand inside outpost boundary circles. The capture speed is influenced by your faction presence vs hostile presence (contested zones halt capture).</li>
+                  <li><strong>Outpost Benefits</strong>: Secured outposts clear local fog of war visibility, spawn friendly defender AI guards periodically, and provide regular tech credits income.</li>
+                  <li><strong>The Sector Overseer</strong>: Once all 4 bases on the map are player-controlled, a giant command boss mech drops at the center of the sector `(1280, 1280)`. Defeating the boss is required to achieve absolute victory.</li>
+                </ul>
+              </div>
+
+              {/* Section 4: Biomes and Hazards */}
+              <div style={manualStyles.section}>
+                <div style={manualStyles.sectionHeader}>4. DROP ZONE BIOME SPECIFICATIONS</div>
+                <ul style={manualStyles.list}>
+                  <li><strong>Forest Ruins</strong>: swamp marsh water zones slow down speeds by 55%.</li>
+                  <li><strong>Wasteland Sludge</strong>: green toxic pools spawn near structures. Standing in pools deals 8 HP/sec damage. Asphalt roadways speed up movement by 35%.</li>
+                  <li><strong>Frozen Tundra</strong>: slippery snow banks. Random blizzards arise, severely decaying commander visual sight radius from 7 tiles to 3.5 tiles.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+};
+
+const manualStyles: Record<string, React.CSSProperties> = {
+  modalBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(5, 6, 11, 0.85)',
+    backdropFilter: 'blur(4px)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+    padding: '24px',
+    boxSizing: 'border-box'
+  },
+  modalCard: {
+    width: '580px',
+    maxWidth: '100%',
+    maxHeight: '90%',
+    backgroundColor: 'var(--bg-panel)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '8px',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    boxShadow: '0 0 30px rgba(0, 242, 254, 0.15)',
+    boxSizing: 'border-box'
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid var(--border-color)',
+    paddingBottom: '10px'
+  },
+  modalTitle: {
+    fontFamily: 'var(--font-header)',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    letterSpacing: '2px',
+    color: 'var(--neon-cyan)',
+    textShadow: '0 0 8px var(--neon-cyan-glow)'
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'color 0.2s'
+  },
+  scrollArea: {
+    flex: 1,
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    paddingRight: '6px'
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  sectionHeader: {
+    fontFamily: 'var(--font-header)',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    letterSpacing: '1px',
+    color: 'var(--neon-cyan)',
+    borderBottom: '1px dashed rgba(255, 255, 255, 0.1)',
+    paddingBottom: '3px'
+  },
+  paragraph: {
+    fontSize: '11px',
+    color: 'var(--text-secondary)',
+    lineHeight: '1.4',
+    margin: 0
+  },
+  list: {
+    fontSize: '11.5px',
+    color: 'var(--text-secondary)',
+    lineHeight: '1.55',
+    margin: 0,
+    paddingLeft: '16px'
+  }
 };
 
 const styles: Record<string, React.CSSProperties> = {

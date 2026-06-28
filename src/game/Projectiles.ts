@@ -154,6 +154,16 @@ export class ProjectilesManager {
       for (const target of collisionTargets) {
         // If projectile is player-owned, only hit enemies. If enemy-owned, only hit player.
         if (proj.isPlayer !== target.isPlayer) {
+          // If player projectile hitting enemy, check if enemy is visible to the player in fog of war
+          if (proj.isPlayer && !target.isPlayer) {
+            const tx = Math.floor(target.x / map.tileSize);
+            const ty = Math.floor(target.y / map.tileSize);
+            const isVisible = map.inBounds(tx, ty) && map.visibility[ty][tx] === 2;
+            if (!isVisible) {
+              continue; // Pass through hidden enemies
+            }
+          }
+
           const dx = proj.x - target.x;
           const dy = proj.y - target.y;
           const distSq = dx*dx + dy*dy;
