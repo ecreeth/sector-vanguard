@@ -105,7 +105,7 @@ describe('Enemy Types and AI Behaviors', () => {
     suicide.update(100, map, target, []);
     expect(suicide.isDead).toBe(true);
     expect(suicide.detonated).toBe(true);
-    expect(target.takeDamage).toHaveBeenCalledWith(30);
+    expect(target.takeDamage).toHaveBeenCalledWith(20);
   });
 
   it('should trigger warning laser for Sniper mech within telegraph range', () => {
@@ -211,6 +211,7 @@ describe('Enemy Types and AI Behaviors', () => {
 
   it('should not allow base guards to march off and assault player outposts on the other side of the map', () => {
     const guard = new Enemy(100, 100, 'DRONE', false, true); // isGuard = true
+    guard.patrolAngle = 0; // ensure determinism
     const player = { x: 999, y: 999, radius: 16, takeDamage: () => {}, isDead: false };
     const map = new GameMap('FOREST');
     
@@ -289,5 +290,36 @@ describe('Enemy Types and AI Behaviors', () => {
     expect(mainEnemy.alertedTimer).toBeGreaterThan(0);
     expect(nearbyEnemy.alertedTimer).toBeGreaterThan(0);
     expect(farEnemy.alertedTimer).toBe(0);
+  });
+
+  it('should not fire projectiles if shootDelay is 0 (like SUICIDE)', () => {
+    const suicide = new Enemy(100, 100, 'SUICIDE', false);
+    const player = { x: 150, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+    
+    // Clear projectiles
+    projectilesManager.projectiles = [];
+    
+    suicide.targetUnit = player;
+    suicide.update(16, map, player, []);
+    
+    // It should not shoot a laser bullet because shootDelay is 0
+    expect(projectilesManager.projectiles.length).toBe(0);
+  });
+
+  it('should cause defenders to circle around player if player is stopped', () => {
+    const defender = new Enemy(100, 100, 'DEFENDER', true);
+    const player = { x: 100, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false, isMoving: false };
+    const map = new GameMap('FOREST');
+    
+    // Set assigned orbit angle to test trajectory
+    defender.assignedOrbitAngle = 0; // cos(0)=1, sin(0)=0. circleRadius=55. Target is (155, 100).
+    (defender as any).assignedCircleRadius = 55;
+    
+    defender.update(16.66, map, player, []);
+    
+    // Since target is (155, 100) and defender is at (100, 100), steerX should be positive
+    expect(defender.vx).toBeGreaterThan(0);
+    expect(defender.vy).toBe(0);
   });
 });

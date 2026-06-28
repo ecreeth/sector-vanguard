@@ -27,7 +27,7 @@ export class Enemy {
   // Patrol and AI States
   patrolX: number;
   patrolY: number;
-  patrolAngle: number = 0;
+  patrolAngle: number = Math.random() * Math.PI * 2;
   patrolRadius: number = 100;
   targetUnit: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean } | null = null;
 
@@ -41,6 +41,7 @@ export class Enemy {
   life: number = 0; // lifespan for temporary entities (Decoy)
   warningLaserActive: boolean = false; // for sniper telegraphing
   detonated: boolean = false; // for suicide drone explosion safety check
+  assignedOrbitAngle?: number;
 
   portalSpawnTimer: number = 0;
   plasmaBurnLvl: number = 0;
@@ -114,11 +115,11 @@ export class Enemy {
         break;
       case 'SUICIDE':
         this.radius = 12;
-        this.hp = 25;
-        this.maxHp = 25;
-        this.speed = 3.0; // very fast!
+        this.hp = 12;
+        this.maxHp = 12;
+        this.speed = 2.4; // fast but reactable
         this.shootDelay = 0; // doesn't shoot
-        this.damage = 30; // explosion damage
+        this.damage = 20; // explosion damage
         this.visionRange = 400;
         break;
       case 'SNIPER':
@@ -270,7 +271,7 @@ export class Enemy {
       if (e.isFriendly && !e.isDead && e !== this.targetUnit) {
         const dx = e.x - this.x;
         const dy = e.y - this.y;
-        if (dx*dx + dy*dy < 80 * 80) {
+        if (dx*dx + dy*dy < 60 * 60) {
           e.takeDamage(this.damage);
         }
       }
@@ -280,7 +281,7 @@ export class Enemy {
     if (player && !player.isDead && player !== this.targetUnit) {
       const dx = player.x - this.x;
       const dy = player.y - this.y;
-      if (dx*dx + dy*dy < 80 * 80) {
+      if (dx*dx + dy*dy < 60 * 60) {
         player.takeDamage(this.damage);
       }
     }
@@ -292,7 +293,7 @@ export class Enemy {
   update(
     dt: number,
     map: GameMap,
-    player: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean },
+    player: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean; isMoving?: boolean },
     otherEnemies: Enemy[]
   ) {
     if (this.isDead) return;
@@ -456,7 +457,8 @@ export class Enemy {
         const dx = this.targetUnit.x - this.x;
         const dy = this.targetUnit.y - this.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist > 50) {
+        const stopDist = this.type === 'SUICIDE' ? 0 : 50;
+        if (dist > stopDist) {
           steerX = dx / dist;
           steerY = dy / dist;
         }
@@ -465,9 +467,23 @@ export class Enemy {
         const dx = player.x - this.x;
         const dy = player.y - this.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 250 && dist > 60 && !player.isDead) {
-          steerX = dx / dist;
-          steerY = dy / dist;
+        if (dist < 250 && !player.isDead) {
+          if (player.isMoving === false && this.assignedOrbitAngle !== undefined) {
+            // Circle around player to protect them using assigned orbit slot
+            const circleRadius = (this as any).assignedCircleRadius || 55;
+            const targetX = player.x + Math.cos(this.assignedOrbitAngle) * circleRadius;
+            const targetY = player.y + Math.sin(this.assignedOrbitAngle) * circleRadius;
+            const tdx = targetX - this.x;
+            const tdy = targetY - this.y;
+            const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
+            if (tDist > 4) {
+              steerX = tdx / tDist;
+              steerY = tdy / tDist;
+            }
+          } else if (dist > 60) {
+            steerX = dx / dist;
+            steerY = dy / dist;
+          }
         } else {
           // Default to patrol around base
           let assaultBase: { x: number, y: number, radius: number } | null = null;
@@ -799,7 +815,7 @@ export class Enemy {
         }
       }
 
-      if (this.shootCooldown === 0) {
+      if (this.shootCooldown === 0 && this.shootDelay > 0 && this.shootDelay !== Infinity) {
         // Perform a raycast line-of-sight check to ensure it doesn't shoot through walls
         const tileXStart = Math.floor(this.x / map.tileSize);
         const tileYStart = Math.floor(this.y / map.tileSize);
@@ -986,6 +1002,9 @@ export class Enemy {
 
         // Visor facing direction
         let walkAngle = Math.atan2(this.vy, this.vx);
+        if (this.assignedOrbitAngle !== undefined) {
+          walkAngle = this.assignedOrbitAngle;
+        }
         if (this.targetUnit) {
           walkAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
         }
@@ -1222,6 +1241,7 @@ export class EnemiesManager {
   enemies: Enemy[] = [];
   spawnTimer: number = 0;
   playerRef: any = null;
+  defenderOrbitAngle: number = 0;
 
   constructor() {
     this.reset();
@@ -1231,6 +1251,7 @@ export class EnemiesManager {
     this.enemies = [];
     this.spawnTimer = 0;
     this.playerRef = null;
+    this.defenderOrbitAngle = 0;
     
     // Spawn initial guards around bases
     // Base Alpha (ENEMY, 2048, 512): Spawn turrets and drones
@@ -1266,9 +1287,40 @@ export class EnemiesManager {
   update(
     dt: number,
     map: GameMap,
-    player: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean }
+    player: { x: number; y: number; takeDamage: (dmg: number) => void; radius: number; isDead: boolean; isMoving?: boolean }
   ) {
     this.playerRef = player;
+
+    // Reset assignedOrbitAngle for all friendly defenders
+    this.enemies.forEach(e => {
+      if (e.type === 'DEFENDER') {
+        e.assignedOrbitAngle = undefined;
+      }
+    });
+
+    // If the player is alive and stopped, assign distributed orbit slots to nearby friendly defenders
+    if (player && !player.isDead && player.isMoving === false) {
+      this.defenderOrbitAngle += 0.02 * (dt / 16.66);
+      
+      const orbitingDefenders = this.enemies.filter(e => 
+        e.isFriendly && 
+        e.type === 'DEFENDER' && 
+        !e.isDead && 
+        Math.sqrt((e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y)) < 250
+      );
+
+      const K = orbitingDefenders.length;
+      if (K > 0) {
+        // Dynamically scale radius to fit all defenders without overcrowding (min 55)
+        const circleRadius = Math.max(55, (K * 32) / (2 * Math.PI) + 8);
+        orbitingDefenders.forEach((e, idx) => {
+          e.assignedOrbitAngle = this.defenderOrbitAngle + (idx / K) * Math.PI * 2;
+          // Store circle radius on defender temporarily to use in update
+          (e as any).assignedCircleRadius = circleRadius;
+        });
+      }
+    }
+
     // 1. Spawning dynamic aggressive patrols towards bases (every 14 seconds)
     this.spawnTimer += dt;
     if (this.spawnTimer >= 14000) {

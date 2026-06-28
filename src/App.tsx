@@ -105,10 +105,37 @@ function App() {
           b.progress = 100;
         });
       } else if (action === 'spawn' && data) {
-        // Spawn 64px in front of player depending on current aim angle
-        const offset = 64;
-        const sx = engine.player.x + Math.cos(engine.player.angle) * offset;
-        const sy = engine.player.y + Math.sin(engine.player.angle) * offset;
+        // Spawn at a random position, not too close to player (between 200px and 450px)
+        let sx = 0;
+        let sy = 0;
+        let attempts = 0;
+        const minDistance = 200;
+        const maxDistance = 450;
+        const enemyRadius = 16;
+        
+        while (attempts < 50) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = minDistance + Math.random() * (maxDistance - minDistance);
+          sx = engine.player.x + Math.cos(angle) * dist;
+          sy = engine.player.y + Math.sin(angle) * dist;
+          
+          const mapW = engine.map.width * engine.map.tileSize;
+          const mapH = engine.map.height * engine.map.tileSize;
+          if (sx > enemyRadius && sx < mapW - enemyRadius && sy > enemyRadius && sy < mapH - enemyRadius) {
+            if (!engine.map.collides(sx, sy, enemyRadius)) {
+              break;
+            }
+          }
+          attempts++;
+        }
+
+        if (attempts >= 50) {
+          // Fallback to original spawn logic if no valid random location found
+          const offset = 64;
+          sx = engine.player.x + Math.cos(engine.player.angle) * offset;
+          sy = engine.player.y + Math.sin(engine.player.angle) * offset;
+        }
+
         if (data === 'DEFENDER') {
           enemiesManager.spawnDefender(sx, sy);
         } else {

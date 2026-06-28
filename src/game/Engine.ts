@@ -331,13 +331,21 @@ export class GameEngine {
 
     // 5. Update Enemies
     // Prepare player as a target object
+    const isPlayerMoving = 
+      !!(this.keys['w'] || this.keys['arrowup'] ||
+         this.keys['s'] || this.keys['arrowdown'] ||
+         this.keys['a'] || this.keys['arrowleft'] ||
+         this.keys['d'] || this.keys['arrowright'] ||
+         this.player.dashDuration > 0);
+
     const playerTarget = {
       x: this.player.x,
       y: this.player.y,
       takeDamage: (dmg: number) => this.player.takeDamage(dmg),
       radius: this.player.radius,
       isDead: this.player.isDead,
-      credits: this.player.credits
+      credits: this.player.credits,
+      isMoving: isPlayerMoving
     };
     enemiesManager.update(dt, this.map, playerTarget);
 
