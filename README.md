@@ -108,4 +108,4 @@ npm run build
 # Execute the Vitest unit/integration test suite
 npm test
 ```
-The test suite consists of **63 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, biome hazards, wall-bound ricochet bounces, pierce penetrations, Shield Mech frontal block angle sectors, spawning portals, plasma burn DoTs, Guard leash AI constraints, combat alerts, and unit separation steering.
+The test suite consists of **64 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, biome hazards, wall-bound ricochet bounces, pierce penetrations, Shield Mech frontal block angle sectors, spawning portals, plasma burn DoTs, Guard leash AI constraints, combat alerts, unit separation steering, and developer sandbox mode options.

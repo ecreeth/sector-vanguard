@@ -145,4 +145,13 @@ describe('Player Logic & Mechanics', () => {
     player.takeDamage(20);
     expect(player.screenShake).toBeGreaterThan(0);
   });
+
+  it('should ignore all damage when godMode is active', () => {
+    const player = new Player(100, 100);
+    player.godMode = true;
+    
+    player.takeDamage(50);
+    expect(player.health).toBe(100);
+    expect(player.shield).toBe(50);
+  });
 });

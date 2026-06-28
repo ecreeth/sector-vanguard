@@ -118,6 +118,8 @@ export class Player {
     this.angle = Math.atan2(my - playerScreenY, mx - playerScreenX);
   }
 
+  godMode: boolean = false;
+
   triggerScreenShake(amount: number) {
     this.screenShake = Math.min(25, this.screenShake + amount);
   }
@@ -125,6 +127,7 @@ export class Player {
   // Damage handling
   takeDamage(amount: number) {
     if (this.isDead) return;
+    if (this.godMode) return;
     
     // Trigger screen shake on damage hit
     this.triggerScreenShake(amount * 0.35);
@@ -378,7 +381,8 @@ export class Player {
       },
       bossActive: !!boss,
       bossHp: boss ? Math.ceil(boss.hp) : 0,
-      bossMaxHp: boss ? boss.maxHp : 0
+      bossMaxHp: boss ? boss.maxHp : 0,
+      godMode: this.godMode
     };
   }
 

@@ -73,6 +73,7 @@ export interface PlayerStats {
   bossActive: boolean;
   bossHp: number;
   bossMaxHp: number;
+  godMode: boolean;
 }
 
 export interface EngineStateUpdate {

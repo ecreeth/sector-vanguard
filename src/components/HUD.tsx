@@ -21,6 +21,8 @@ interface HUDProps {
   onQuit: () => void;
   onBuyUpgrade: (type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN') => void;
   onBuildTurret: () => void;
+  selectedBiome?: string;
+  onDevAction?: (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn', data?: any) => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -34,9 +36,11 @@ export const HUD: React.FC<HUDProps> = ({
   onPause,
   onQuit,
   onBuyUpgrade,
-  onBuildTurret
+  onBuildTurret,
+  selectedBiome,
+  onDevAction
 }) => {
-  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades } = stats;
+  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades, godMode } = stats;
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -408,6 +412,84 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
       )}
+
+      {/* 5. DEVELOPER SANDBOX PANEL (shown only in DEV_SANDBOX mode) */}
+      {selectedBiome === 'DEV_SANDBOX' && onDevAction && (
+        <div style={hudStyles.devPanel} className="hud-panel">
+          <div style={hudStyles.panelTitle}>
+            <span style={{ color: '#ff0055' }}>🛠️ DEVELOPER SANDBOX</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* God Mode Toggle */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>GOD MODE</span>
+              <button
+                onClick={() => onDevAction('god')}
+                style={{
+                  ...hudStyles.devBtn,
+                  color: godMode ? 'var(--neon-green)' : 'var(--text-muted)',
+                  borderColor: godMode ? 'var(--neon-green)' : 'var(--border-color)',
+                  background: godMode ? 'rgba(57, 255, 20, 0.05)' : 'none'
+                }}
+              >
+                {godMode ? 'ACTIVE' : 'INACTIVE'}
+              </button>
+            </div>
+
+            {/* Instant Credits */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>SANDBOX CURRENCY</span>
+              <button
+                onClick={() => onDevAction('credits')}
+                style={hudStyles.devBtn}
+              >
+                +9999 CR
+              </button>
+            </div>
+
+            {/* Secure Bases */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>OUTPOST SECURE FLOW</span>
+              <button
+                onClick={() => onDevAction('capture')}
+                style={hudStyles.devBtn}
+              >
+                SECURE ALL
+              </button>
+            </div>
+
+            {/* Wipe Enemies */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>GRID SANITIZATION</span>
+              <button
+                onClick={() => onDevAction('clear')}
+                style={{ ...hudStyles.devBtn, color: 'var(--neon-red)', borderColor: 'var(--neon-red)' }}
+              >
+                WIPE ENEMIES
+              </button>
+            </div>
+          </div>
+
+          {/* Spawn Entity Section */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 8, marginTop: 4 }}>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: 6 }}>
+              INSTANT UNIT MATERIALIZER
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              {(['DRONE', 'SUICIDE', 'SHIELD_MECH', 'SNIPER', 'MECH', 'TURRET', 'PORTAL', 'BOSS', 'DEFENDER'] as const).map(eType => (
+                <button
+                  key={eType}
+                  onClick={() => onDevAction('spawn', eType)}
+                  style={{ ...hudStyles.devBtn, fontSize: '9px', padding: '3px 0', textAlign: 'center', width: '100%' }}
+                >
+                  + {eType.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -622,6 +704,29 @@ const hudStyles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '12px',
     pointerEvents: 'auto'
+  },
+  devPanel: {
+    position: 'absolute',
+    right: '16px',
+    top: '80px',
+    width: '290px',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    pointerEvents: 'auto'
+  },
+  devBtn: {
+    background: 'rgba(0, 0, 0, 0.4)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '4px',
+    color: 'var(--text-primary)',
+    padding: '4px 10px',
+    cursor: 'pointer',
+    fontSize: '10px',
+    fontFamily: 'var(--font-header)',
+    fontWeight: 'bold',
+    transition: 'all 0.15s ease'
   },
   activeWeaponArea: {
     background: 'rgba(0, 0, 0, 0.3)',

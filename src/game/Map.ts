@@ -47,7 +47,7 @@ export class GameMap {
 
     // Base fill depending on biome
     let defaultFill: TileType = 'GRASS';
-    if (biome === 'WASTELAND') {
+    if (biome === 'WASTELAND' || biome === 'DEV_SANDBOX') {
       defaultFill = 'ROAD'; // asphalt ground
     } else if (biome === 'TUNDRA') {
       defaultFill = 'GRASS'; // snow field
@@ -60,17 +60,19 @@ export class GameMap {
     }
 
     // Generate elements: Walls, Rivers (Water), Roads, and Forests
-    // 1. Rivers / Water canals
-    this.generateRivers();
+    if (biome !== 'DEV_SANDBOX') {
+      // 1. Rivers / Water canals
+      this.generateRivers();
 
-    // 2. Road systems (connecting the map)
-    this.generateRoads();
+      // 2. Road systems (connecting the map)
+      this.generateRoads();
 
-    // 3. Forests / Tall Grass (for hiding/cover)
-    this.generateForests();
+      // 3. Forests / Tall Grass (for hiding/cover)
+      this.generateForests();
 
-    // 4. Wall clusters (cover)
-    this.generateWalls();
+      // 4. Wall clusters (cover)
+      this.generateWalls();
+    }
 
     // 5. Border walls
     for (let y = 0; y < this.height; y++) {
@@ -81,8 +83,10 @@ export class GameMap {
       }
     }
 
-    // 6. Generate cover explosive barrels
-    this.generateBarrels();
+    if (biome !== 'DEV_SANDBOX') {
+      // 6. Generate cover explosive barrels
+      this.generateBarrels();
+    }
 
     // 7. Generate initial toxic sludge zones for Wasteland
     if (biome === 'WASTELAND') {
@@ -473,8 +477,16 @@ export class GameMap {
     }
   }
 
-  // Update visibility based on player position and fog clearing rules
   updateVisibility(playerX: number, playerY: number, basePositions: {x: number, y: number, isPlayerFaction: boolean}[]) {
+    if (this.biome === 'DEV_SANDBOX') {
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          this.visibility[y][x] = 2;
+        }
+      }
+      return;
+    }
+
     // 1. Decay current visible tiles (2) to explored (1)
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {

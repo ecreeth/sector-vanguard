@@ -6,6 +6,7 @@ import type { GameEngine } from './game/Engine';
 import type { GameState, EngineStateUpdate, WeaponType } from './game/Types';
 import { sound } from './game/Sound';
 import { basesManager } from './game/Bases';
+import { enemiesManager } from './game/Enemies';
 import { Play, RotateCcw } from 'lucide-react';
 import './App.css';
 
@@ -89,6 +90,34 @@ function App() {
     }
   };
 
+  const handleDevAction = (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn', data?: any) => {
+    if (engineRef.current) {
+      const engine = engineRef.current;
+      if (action === 'god') {
+        engine.player.godMode = !engine.player.godMode;
+      } else if (action === 'credits') {
+        engine.player.credits = 9999;
+      } else if (action === 'clear') {
+        enemiesManager.enemies = [];
+      } else if (action === 'capture') {
+        basesManager.bases.forEach(b => {
+          b.faction = 'PLAYER';
+          b.progress = 100;
+        });
+      } else if (action === 'spawn' && data) {
+        // Spawn 64px in front of player depending on current aim angle
+        const offset = 64;
+        const sx = engine.player.x + Math.cos(engine.player.angle) * offset;
+        const sy = engine.player.y + Math.sin(engine.player.angle) * offset;
+        if (data === 'DEFENDER') {
+          enemiesManager.spawnDefender(sx, sy);
+        } else {
+          enemiesManager.spawnEnemy(sx, sy, data, false);
+        }
+      }
+    }
+  };
+
   return (
     <div className="app-container">
       {/* Global CRT Screen Filter */}
@@ -117,6 +146,8 @@ function App() {
           onQuit={handleQuit}
           onBuyUpgrade={handleBuyUpgrade}
           onBuildTurret={handleBuildTurret}
+          selectedBiome={selectedBiome}
+          onDevAction={handleDevAction}
         />
       )}
 

@@ -41,6 +41,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       name: 'CYBER-GRID ROAD',
       desc: 'Glowing charge nodes boost shield regen, active laser gates obstruct movement, hackable pathways.',
       color: '#c084fc'
+    },
+    {
+      id: 'DEV_SANDBOX',
+      name: 'DEV SANDBOX',
+      desc: 'Developer Sandbox. God mode, spawn panel, instant credits, and full sandbox control.',
+      color: '#ff0055'
     }
   ];
 
