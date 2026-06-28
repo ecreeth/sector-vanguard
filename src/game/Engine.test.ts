@@ -14,6 +14,12 @@ vi.mock('./Sound', () => ({
     playPurchase: vi.fn(),
     playShieldRegen: vi.fn(),
     playLaser: vi.fn(),
+    startMusic: vi.fn(),
+    stopMusic: vi.fn(),
+    playDecoyDeploy: vi.fn(),
+    playSniperWarning: vi.fn(),
+    playSniperShoot: vi.fn(),
+    playPickup: vi.fn(),
     toggle: vi.fn(),
     isEnabled: () => false
   }

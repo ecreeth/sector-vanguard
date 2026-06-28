@@ -35,6 +35,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       name: 'FROZEN TUNDRA',
       desc: 'Slippery snow fields, icy water slows heavily, sparse cover, longer sight lines.',
       color: 'var(--neon-cyan)'
+    },
+    {
+      id: 'CYBER',
+      name: 'CYBER-GRID ROAD',
+      desc: 'Glowing charge nodes boost shield regen, active laser gates obstruct movement, hackable pathways.',
+      color: '#c084fc'
     }
   ];
 

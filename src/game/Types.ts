@@ -30,9 +30,11 @@ export interface SkillStats {
   empCooldown: number; // 0 to 1 percentage remaining
   airstrikeCooldown: number;
   droneCooldown: number;
+  decoyCooldown: number;
   empCost: number;
   airstrikeCost: number;
   droneCost: number;
+  decoyCost: number;
 }
 
 export interface UpgradeStats {

@@ -2,8 +2,9 @@ import type { GameMap } from './Map';
 import { projectilesManager } from './Projectiles';
 import { sound } from './Sound';
 import { basesManager } from './Bases';
+import { lootManager } from './Loot';
 
-export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER' | 'BOSS';
+export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER' | 'BOSS' | 'SUICIDE' | 'SNIPER' | 'DECOY';
 
 export class Enemy {
   x: number;
@@ -34,6 +35,11 @@ export class Enemy {
   // Stun states and Boss triggers
   stunTimer: number = 0;
   bossSpawnsDone: Record<number, boolean> = { 600: false, 400: false, 200: false };
+
+  // New expansion states
+  life: number = 0; // lifespan for temporary entities (Decoy)
+  warningLaserActive: boolean = false; // for sniper telegraphing
+  detonated: boolean = false; // for suicide drone explosion safety check
 
   constructor(x: number, y: number, type: EnemyType, isFriendly: boolean) {
     this.x = x;
@@ -91,6 +97,34 @@ export class Enemy {
         this.damage = 10;
         this.visionRange = 300;
         break;
+      case 'SUICIDE':
+        this.radius = 12;
+        this.hp = 25;
+        this.maxHp = 25;
+        this.speed = 3.0; // very fast!
+        this.shootDelay = 0; // doesn't shoot
+        this.damage = 30; // explosion damage
+        this.visionRange = 400;
+        break;
+      case 'SNIPER':
+        this.radius = 20;
+        this.hp = 60;
+        this.maxHp = 60;
+        this.speed = 0.8;
+        this.shootDelay = 3500; // fires slowly
+        this.damage = 40; // high damage
+        this.visionRange = 600;
+        break;
+      case 'DECOY':
+        this.radius = 18;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.speed = 0; // stationary
+        this.shootDelay = Infinity;
+        this.damage = 40; // detonation damage
+        this.visionRange = 0;
+        this.life = 6000; // lasts 6 seconds
+        break;
     }
   }
 
@@ -133,7 +167,60 @@ export class Enemy {
       this.isDead = true;
       projectilesManager.spawnExplosionParticles(this.x, this.y, this.radius * 1.5);
       sound.playExplosion();
+
+      // Spawn loot drops for hostile deaths
+      if (!this.isFriendly && this.type !== 'DECOY') {
+        if (Math.random() < 0.5) {
+          lootManager.spawnDrop(this.x, this.y);
+        }
+      }
+
+      // Decoy self-detonation on death
+      if (this.type === 'DECOY' && !this.detonated) {
+        this.detonated = true;
+        enemiesManager.enemies.forEach(e => {
+          if (!e.isFriendly && !e.isDead) {
+            const dx = e.x - this.x;
+            const dy = e.y - this.y;
+            if (dx*dx + dy*dy < 80 * 80) {
+              e.takeDamage(this.damage); // 40 damage
+            }
+          }
+        });
+      }
     }
+  }
+
+  detonateSuicide(player: any) {
+    if (this.detonated) return;
+    this.detonated = true;
+    this.isDead = true;
+
+    // Damage primary target
+    this.targetUnit?.takeDamage(this.damage);
+
+    // Area damage to friendly units in range
+    enemiesManager.enemies.forEach(e => {
+      if (e.isFriendly && !e.isDead && e !== this.targetUnit) {
+        const dx = e.x - this.x;
+        const dy = e.y - this.y;
+        if (dx*dx + dy*dy < 80 * 80) {
+          e.takeDamage(this.damage);
+        }
+      }
+    });
+
+    // Damage player if nearby and not targetUnit
+    if (player && !player.isDead && player !== this.targetUnit) {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      if (dx*dx + dy*dy < 80 * 80) {
+        player.takeDamage(this.damage);
+      }
+    }
+
+    projectilesManager.spawnExplosionParticles(this.x, this.y, 40);
+    sound.playExplosion();
   }
 
   update(
@@ -143,6 +230,16 @@ export class Enemy {
     otherEnemies: Enemy[]
   ) {
     if (this.isDead) return;
+
+    if (this.type === 'DECOY') {
+      this.life -= dt;
+      if (this.life <= 0) {
+        this.takeDamage(this.hp);
+      }
+      return;
+    }
+
+    this.warningLaserActive = false;
 
     // Process EMP stun
     if (this.stunTimer > 0) {
@@ -221,6 +318,64 @@ export class Enemy {
         if (dist > 50) {
           steerX = dx / dist;
           steerY = dy / dist;
+        }
+      } else if (this.isFriendly && this.type === 'DEFENDER') {
+        // Escort player if close and player is alive
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 250 && dist > 60 && !player.isDead) {
+          steerX = dx / dist;
+          steerY = dy / dist;
+        } else {
+          // Default to patrol around base
+          let assaultBase: { x: number, y: number, radius: number } | null = null;
+          let minBaseDist = Infinity;
+          basesManager.bases.forEach(b => {
+            if (b.faction === 'PLAYER') {
+              const bdx = b.x - this.x;
+              const bdy = b.y - this.y;
+              const bdist = Math.sqrt(bdx*bdx + bdy*bdy);
+              if (bdist < minBaseDist) {
+                minBaseDist = bdist;
+                assaultBase = b;
+              }
+            }
+          });
+
+          if (assaultBase) {
+            const base: { x: number, y: number, radius: number } = assaultBase;
+            const bdx = base.x - this.x;
+            const bdy = base.y - this.y;
+            const bdist = Math.sqrt(bdx*bdx + bdy*bdy);
+            if (bdist > base.radius - 30) {
+              steerX = bdx / bdist;
+              steerY = bdy / bdist;
+            } else {
+              this.patrolAngle += 0.01 * (dt / 16.66);
+              const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
+              const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
+              const tdx = targetX - this.x;
+              const tdy = targetY - this.y;
+              const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
+              if (tDist > 8) {
+                steerX = tdx / tDist;
+                steerY = tdy / tDist;
+              }
+            }
+          } else {
+            // Standard patrol wandering
+            this.patrolAngle += 0.015 * (dt / 16.66);
+            const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
+            const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+            const pdx = targetPatrolX - this.x;
+            const pdy = targetPatrolY - this.y;
+            const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+            if (pdist > 10) {
+              steerX = pdx / pdist;
+              steerY = pdy / pdist;
+            }
+          }
         }
       } else {
         // Check if hostile unit should assault a player-secured or neutral outpost base
@@ -409,33 +564,55 @@ export class Enemy {
     }
 
     // 4. Attack execution
-    if (this.targetUnit && this.shootCooldown === 0) {
+    if (this.targetUnit) {
       const dx = this.targetUnit.x - this.x;
       const dy = this.targetUnit.y - this.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
 
-      // Perform a raycast line-of-sight check to ensure it doesn't shoot through walls
-      const tileXStart = Math.floor(this.x / map.tileSize);
-      const tileYStart = Math.floor(this.y / map.tileSize);
-      const tileXEnd = Math.floor(this.targetUnit.x / map.tileSize);
-      const tileYEnd = Math.floor(this.targetUnit.y / map.tileSize);
-
-      let hasLOS = true;
-      // Simple LOS ray check (approximate grid marching)
-      const steps = Math.max(Math.abs(tileXEnd - tileXStart), Math.abs(tileYEnd - tileYStart));
-      for (let s = 1; s < steps; s++) {
-        const tx = Math.floor(tileXStart + (tileXEnd - tileXStart) * (s / steps));
-        const ty = Math.floor(tileYStart + (tileYEnd - tileYStart) * (s / steps));
-        if (map.inBounds(tx, ty) && map.tiles[ty][tx] === 'WALL') {
-          hasLOS = false;
-          break;
+      // Suicide drone detonation check
+      if (this.type === 'SUICIDE') {
+        if (dist < this.radius + this.targetUnit.radius + 8) {
+          this.detonateSuicide(player);
+          return;
         }
       }
 
-      if (hasLOS && dist < this.visionRange) {
-        const angle = Math.atan2(dy, dx);
-        this.shoot(angle);
-        this.shootCooldown = this.shootDelay;
+      // Sniper warning telegraph logic
+      if (this.type === 'SNIPER' && !this.targetUnit.isDead) {
+        if (dist < this.visionRange) {
+          if (this.shootCooldown > 0 && this.shootCooldown <= 1500) {
+            this.warningLaserActive = true;
+            if (this.shootCooldown >= 1500 - dt * 1.5) {
+              sound.playSniperWarning();
+            }
+          }
+        }
+      }
+
+      if (this.shootCooldown === 0) {
+        // Perform a raycast line-of-sight check to ensure it doesn't shoot through walls
+        const tileXStart = Math.floor(this.x / map.tileSize);
+        const tileYStart = Math.floor(this.y / map.tileSize);
+        const tileXEnd = Math.floor(this.targetUnit.x / map.tileSize);
+        const tileYEnd = Math.floor(this.targetUnit.y / map.tileSize);
+
+        let hasLOS = true;
+        // Simple LOS ray check (approximate grid marching)
+        const steps = Math.max(Math.abs(tileXEnd - tileXStart), Math.abs(tileYEnd - tileYStart));
+        for (let s = 1; s < steps; s++) {
+          const tx = Math.floor(tileXStart + (tileXEnd - tileXStart) * (s / steps));
+          const ty = Math.floor(tileYStart + (tileYEnd - tileYStart) * (s / steps));
+          if (map.inBounds(tx, ty) && map.tiles[ty][tx] === 'WALL') {
+            hasLOS = false;
+            break;
+          }
+        }
+
+        if (hasLOS && dist < this.visionRange) {
+          const angle = Math.atan2(dy, dx);
+          this.shoot(angle);
+          this.shootCooldown = this.shootDelay;
+        }
       }
     }
   }
@@ -469,6 +646,19 @@ export class Enemy {
         '#ff5500', // Red-orange rocket glow
         7 // large bullet size
       );
+    } else if (this.type === 'SNIPER') {
+      // Fast sniper bolt
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(angle) * (this.radius + 8),
+        this.y + Math.sin(angle) * (this.radius + 8),
+        angle,
+        18, // high speed
+        this.damage,
+        this.isFriendly,
+        '#00ffff', // Cyan sniper bolt
+        3.0
+      );
+      sound.playSniperShoot();
     } else {
       // Standard laser bullet
       projectilesManager.spawnBullet(
@@ -489,6 +679,19 @@ export class Enemy {
 
     const screenX = this.x - cameraX;
     const screenY = this.y - cameraY;
+
+    // Draw sniper telegraph laser
+    if (this.warningLaserActive && this.targetUnit) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 0, 85, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(screenX, screenY);
+      ctx.lineTo(this.targetUnit.x - cameraX, this.targetUnit.y - cameraY);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Draw unit bodies
     switch (this.type) {
@@ -580,6 +783,89 @@ export class Enemy {
         ctx.beginPath();
         ctx.arc(screenX + Math.cos(walkAngle) * (this.radius - 4), screenY + Math.sin(walkAngle) * (this.radius - 4), 3, 0, Math.PI * 2);
         ctx.fill();
+        break;
+
+      case 'SUICIDE':
+        // Small orange triangular drone
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#f97316'; // orange glow border
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const moveAngle = Math.atan2(this.vy, this.vx) || (Date.now() / 300);
+        ctx.moveTo(screenX + Math.cos(moveAngle) * this.radius, screenY + Math.sin(moveAngle) * this.radius);
+        ctx.lineTo(screenX + Math.cos(moveAngle + 2.3) * this.radius, screenY + Math.sin(moveAngle + 2.3) * this.radius);
+        ctx.lineTo(screenX + Math.cos(moveAngle - 2.3) * this.radius, screenY + Math.sin(moveAngle - 2.3) * this.radius);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Glowing core
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case 'SNIPER':
+        // Hexagonal purple/cyan sniper chassis
+        ctx.fillStyle = '#1e1b4b'; // deep indigo
+        ctx.strokeStyle = '#c084fc'; // purple border
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * Math.PI) / 3;
+          const radiusX = this.radius * (i % 3 === 0 ? 1.3 : 0.8);
+          const radiusY = this.radius * (i % 3 === 0 ? 0.7 : 0.8);
+          const px = screenX + Math.cos(angle) * radiusX;
+          const py = screenY + Math.sin(angle) * radiusY;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Long barrel
+        let sniperAimAngle = 0;
+        if (this.targetUnit) {
+          sniperAimAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
+        } else {
+          sniperAimAngle = Date.now() / 1000;
+        }
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY);
+        ctx.lineTo(screenX + Math.cos(sniperAimAngle) * 32, screenY + Math.sin(sniperAimAngle) * 32);
+        ctx.stroke();
+
+        // Cyan visor finder
+        ctx.fillStyle = '#06b6d4';
+        ctx.beginPath();
+        ctx.arc(screenX + Math.cos(sniperAimAngle) * 8, screenY + Math.sin(sniperAimAngle) * 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case 'DECOY':
+        // Glowing cyan decoy frame
+        ctx.strokeStyle = 'rgba(0, 242, 254, 0.7)';
+        ctx.fillStyle = 'rgba(0, 242, 254, 0.08)';
+        ctx.lineWidth = 2.5;
+        
+        const pulseRadius = this.radius + Math.sin(Date.now() / 150) * 1.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, pulseRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Scan scanner line
+        const scanY = screenY + Math.sin(Date.now() / 200) * pulseRadius;
+        ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(screenX - Math.sqrt(Math.max(0, pulseRadius*pulseRadius - (scanY-screenY)*(scanY-screenY))), scanY);
+        ctx.lineTo(screenX + Math.sqrt(Math.max(0, pulseRadius*pulseRadius - (scanY-screenY)*(scanY-screenY))), scanY);
+        ctx.stroke();
         break;
 
       case 'BOSS':
@@ -742,7 +1028,17 @@ export class EnemiesManager {
         sy = Math.random() * (map.height * 64 - 200) + 100;
       }
 
-      const squadType = Math.random() > 0.4 ? 'DRONE' : 'MECH';
+      const r = Math.random();
+      let squadType: EnemyType = 'DRONE';
+      if (r < 0.35) {
+        squadType = 'DRONE';
+      } else if (r < 0.6) {
+        squadType = 'MECH';
+      } else if (r < 0.8) {
+        squadType = 'SUICIDE';
+      } else {
+        squadType = 'SNIPER';
+      }
       this.spawnEnemy(sx, sy, squadType);
     }
 

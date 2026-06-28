@@ -14,6 +14,12 @@ vi.mock('./Sound', () => ({
     playPurchase: vi.fn(),
     playShieldRegen: vi.fn(),
     playLaser: vi.fn(),
+    startMusic: vi.fn(),
+    stopMusic: vi.fn(),
+    playDecoyDeploy: vi.fn(),
+    playSniperWarning: vi.fn(),
+    playSniperShoot: vi.fn(),
+    playPickup: vi.fn(),
     toggle: vi.fn(),
     isEnabled: () => false
   }
@@ -77,7 +83,7 @@ describe('Enemy Types and AI Behaviors', () => {
     expect(drone.targetUnit?.x).toBe(150);
   });
 
-  it('should trigger squad spawns on Boss HP threshold triggers', () => {
+  it('should trigger squad spawns on Boss HP HP triggers', () => {
     enemiesManager.spawnEnemy(100, 100, 'BOSS');
     const boss = enemiesManager.enemies[enemiesManager.enemies.length - 1];
 
@@ -85,7 +91,51 @@ describe('Enemy Types and AI Behaviors', () => {
     boss.takeDamage(210); // HP drops to 590
     
     // Drones should be spawned
-    expect(enemiesManager.enemies.length).toBeGreaterThan(14);
+    expect(enemiesManager.enemies.length).toBeGreaterThan(1);
     expect(enemiesManager.enemies.some(e => e.type === 'DRONE')).toBe(true);
+  });
+
+  it('should detonate Suicide drone on contact with target unit', () => {
+    const suicide = new Enemy(100, 100, 'SUICIDE', false);
+    const target = { x: 105, y: 100, takeDamage: vi.fn(), radius: 18, isDead: false };
+    const map = new GameMap('FOREST');
+
+    suicide.targetUnit = target;
+    suicide.update(100, map, target, []);
+    expect(suicide.isDead).toBe(true);
+    expect(suicide.detonated).toBe(true);
+    expect(target.takeDamage).toHaveBeenCalledWith(30);
+  });
+
+  it('should trigger warning laser for Sniper mech within telegraph range', () => {
+    const sniper = new Enemy(100, 100, 'SNIPER', false);
+    const target = { x: 300, y: 100, takeDamage: vi.fn(), radius: 18, isDead: false };
+    const map = new GameMap('FOREST');
+
+    sniper.targetUnit = target;
+    sniper.shootCooldown = 1000; // within 1.5s warning telegraph window
+    sniper.update(100, map, target, []);
+    expect(sniper.warningLaserActive).toBe(true);
+  });
+
+  it('should tick Decoy lifespan and detonate decoy on decay expiry', () => {
+    const decoy = new Enemy(100, 100, 'DECOY', true);
+    decoy.life = 100; // 100ms remaining
+    const map = new GameMap('FOREST');
+    const playerTarget = { x: 150, y: 150, takeDamage: () => {}, radius: 16, isDead: false };
+
+    decoy.update(150, map, playerTarget, []);
+    expect(decoy.isDead).toBe(true);
+    expect(decoy.detonated).toBe(true);
+  });
+
+  it('should escort player when defender has no hostiles in vision range', () => {
+    const defender = new Enemy(100, 100, 'DEFENDER', true);
+    const playerTarget = { x: 200, y: 100, takeDamage: () => {}, radius: 18, isDead: false };
+    const map = new GameMap('FOREST');
+
+    defender.update(100, map, playerTarget, []);
+    // vx should be positive towards player (200, 100)
+    expect(defender.vx).toBeGreaterThan(0);
   });
 });

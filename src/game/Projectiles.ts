@@ -1,4 +1,5 @@
 import { GameMap } from './Map';
+import { sound } from './Sound';
 
 export interface Projectile {
   x: number;
@@ -135,6 +136,33 @@ export class ProjectilesManager {
       }
 
       if (hitBarrel) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check active power gates collision
+      let hitGate = false;
+      for (const g of map.powerGates) {
+        if (g.active) {
+          const dx = nextX - g.x;
+          const dy = nextY - g.y;
+          const distSq = dx*dx + dy*dy;
+          const minDist = proj.radius + 24; // gate collision radius
+          if (distSq < minDist * minDist) {
+            g.hp -= proj.damage;
+            this.spawnSparks(proj.x, proj.y, '#00f2fe', 6);
+            hitGate = true;
+            if (g.hp <= 0) {
+              g.active = false;
+              sound.playExplosion();
+              this.spawnExplosionParticles(g.x, g.y, 35);
+            }
+            break;
+          }
+        }
+      }
+
+      if (hitGate) {
         this.projectiles.splice(i, 1);
         continue;
       }

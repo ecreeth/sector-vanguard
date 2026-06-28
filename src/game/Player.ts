@@ -1,7 +1,7 @@
 import type { Weapon, WeaponType, PlayerStats } from './Types';
 import type { GameMap } from './Map';
 import { sound } from './Sound';
-import { enemiesManager } from './Enemies';
+import { enemiesManager, Enemy } from './Enemies';
 import { projectilesManager } from './Projectiles';
 
 export class Player {
@@ -75,16 +75,20 @@ export class Player {
   empCooldown: number = 0;
   airstrikeCooldown: number = 0;
   droneCooldown: number = 0;
+  decoyCooldown: number = 0;
 
   empMaxCooldown: number = 12000;
   airstrikeMaxCooldown: number = 20000;
   droneMaxCooldown: number = 15000;
+  decoyMaxCooldown: number = 18000;
 
   empCost: number = 120;
   airstrikeCost: number = 240;
   droneCost: number = 180;
+  decoyCost: number = 150;
 
   repairDroneDuration: number = 0;
+  screenShake: number = 0;
 
   queuedExplosions: Array<{
     x: number;
@@ -108,10 +112,17 @@ export class Player {
     this.angle = Math.atan2(my - playerScreenY, mx - playerScreenX);
   }
 
+  triggerScreenShake(amount: number) {
+    this.screenShake = Math.min(25, this.screenShake + amount);
+  }
+
   // Damage handling
   takeDamage(amount: number) {
     if (this.isDead) return;
     
+    // Trigger screen shake on damage hit
+    this.triggerScreenShake(amount * 0.35);
+
     // Reset shield regeneration delay
     this.shieldRegenTimer = 4000; // 4 seconds delay before regen starts
 
@@ -208,6 +219,12 @@ export class Player {
     if (this.empCooldown > 0) this.empCooldown = Math.max(0, this.empCooldown - dt);
     if (this.airstrikeCooldown > 0) this.airstrikeCooldown = Math.max(0, this.airstrikeCooldown - dt);
     if (this.droneCooldown > 0) this.droneCooldown = Math.max(0, this.droneCooldown - dt);
+    if (this.decoyCooldown > 0) this.decoyCooldown = Math.max(0, this.decoyCooldown - dt);
+
+    // Screen shake decay
+    if (this.screenShake > 0) {
+      this.screenShake = Math.max(0, this.screenShake - (dt * 0.03));
+    }
 
     // Repair drone healing ticks
     if (this.repairDroneDuration > 0) {
@@ -225,6 +242,7 @@ export class Player {
       if (exp.delay <= 0) {
         exp.exploded = true;
         sound.playExplosion();
+        this.triggerScreenShake(8);
 
         // Damage enemies in target radius
         enemiesManager.enemies.forEach(e => {
@@ -322,9 +340,11 @@ export class Player {
         empCooldown: this.empCooldown > 0 ? this.empCooldown / this.empMaxCooldown : 0,
         airstrikeCooldown: this.airstrikeCooldown > 0 ? this.airstrikeCooldown / this.airstrikeMaxCooldown : 0,
         droneCooldown: this.droneCooldown > 0 ? this.droneCooldown / this.droneMaxCooldown : 0,
+        decoyCooldown: this.decoyCooldown > 0 ? this.decoyCooldown / this.decoyMaxCooldown : 0,
         empCost: this.empCost,
         airstrikeCost: this.airstrikeCost,
-        droneCost: this.droneCost
+        droneCost: this.droneCost,
+        decoyCost: this.decoyCost
       },
       upgrades: {
         healthLvl: this.healthLvl,
@@ -509,6 +529,16 @@ export class Player {
     this.droneCooldown = this.droneMaxCooldown;
     this.repairDroneDuration = 10000; // active for 10 seconds
     sound.playPurchase();
+    return true;
+  }
+
+  triggerDecoy(tx: number, ty: number): boolean {
+    if (this.isDead || this.decoyCooldown > 0 || this.credits < this.decoyCost) return false;
+    this.credits -= this.decoyCost;
+    this.decoyCooldown = this.decoyMaxCooldown;
+    sound.playDecoyDeploy();
+    // Spawn friendly decoy at target coordinate
+    enemiesManager.enemies.push(new Enemy(tx, ty, 'DECOY', true));
     return true;
   }
 

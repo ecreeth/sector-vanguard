@@ -5,6 +5,7 @@ import { projectilesManager } from './Projectiles';
 import { basesManager } from './Bases';
 import { enemiesManager } from './Enemies';
 import { sound } from './Sound';
+import { lootManager } from './Loot';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -77,6 +78,11 @@ export class GameEngine {
     if (e.key === '3') {
       this.player?.triggerRepairDrone();
     }
+    if (e.key === '4') {
+      const worldX = this.mouseX + this.cameraX;
+      const worldY = this.mouseY + this.cameraY;
+      this.player?.triggerDecoy(worldX, worldY);
+    }
   };
 
   private handleKeyUp = (e: KeyboardEvent) => {
@@ -132,12 +138,14 @@ export class GameEngine {
       this.gameState = 'PAUSED';
       this.mouseClicked = false;
       this.keys = {}; // clear active keys on pause
+      sound.stopMusic();
     } else if (this.gameState === 'PAUSED') {
       this.gameState = 'PLAYING';
       this.lastTime = performance.now();
       if (this.animationFrameId) {
         cancelAnimationFrame(this.animationFrameId);
       }
+      sound.startMusic();
       this.animationFrameId = requestAnimationFrame((t) => this.loop(t));
     }
 
@@ -184,6 +192,7 @@ export class GameEngine {
     projectilesManager.particles = [];
     basesManager.reset();
     enemiesManager.reset();
+    lootManager.reset();
 
     this.gameState = 'PLAYING';
     this.bossSpawned = false;
@@ -194,6 +203,7 @@ export class GameEngine {
       cancelAnimationFrame(this.animationFrameId);
     }
     
+    sound.startMusic();
     this.animationFrameId = requestAnimationFrame((timestamp) => this.loop(timestamp));
   }
 
@@ -203,6 +213,7 @@ export class GameEngine {
       this.animationFrameId = null;
     }
     this.gameState = 'MENU';
+    sound.stopMusic();
   }
 
   private loop(timestamp: number) {
@@ -316,12 +327,36 @@ export class GameEngine {
       y: this.player.y,
       takeDamage: (dmg: number) => this.player.takeDamage(dmg),
       radius: this.player.radius,
-      isDead: this.player.isDead
+      isDead: this.player.isDead,
+      credits: this.player.credits
     };
     enemiesManager.update(dt, this.map, playerTarget);
 
-    // Update map hazards, toxic pools, and blizzards
-    this.map.update(dt, playerTarget);
+    // Update map hazards, toxic pools, blizzards, and cyber hacks
+    this.map.update(dt, playerTarget, (amount) => {
+      this.player.credits += amount;
+    });
+
+    // Cyber Biome Shield Node Regen Boost
+    let inRechargeNode = false;
+    if (this.map.biome === 'CYBER') {
+      this.map.shieldNodes.forEach(n => {
+        const dx = this.player.x - n.x;
+        const dy = this.player.y - n.y;
+        if (dx*dx + dy*dy < n.radius * n.radius) {
+          inRechargeNode = true;
+        }
+      });
+    }
+    if (inRechargeNode) {
+      this.player.shieldRegenTimer = 0;
+      if (this.player.shield < this.player.maxShield) {
+        this.player.shield = Math.min(this.player.maxShield, this.player.shield + (30 * dt) / 1000);
+      }
+    }
+
+    // Update dynamic loot drop collections
+    lootManager.update(dt, this.player);
 
     // 6. Update Projectiles
     // Gather all valid hit targets (player and enemies)
@@ -405,11 +440,22 @@ export class GameEngine {
   private draw() {
     this.ctx.clearRect(0, 0, this.screenWidth, this.screenHeight);
 
+    // Apply screenshake translation to context
+    const shake = this.player.screenShake;
+    const dx = (Math.random() - 0.5) * shake;
+    const dy = (Math.random() - 0.5) * shake;
+
+    this.ctx.save();
+    this.ctx.translate(dx, dy);
+
     // 1. Draw Map Tiles and fog
     this.map.draw(this.ctx, this.cameraX, this.cameraY, this.screenWidth, this.screenHeight, this.selectedBiome);
 
     // 2. Draw Capture Outposts
     basesManager.draw(this.ctx, this.cameraX, this.cameraY);
+
+    // 2.5 Draw Active loot drops
+    lootManager.draw(this.ctx, this.cameraX, this.cameraY);
 
     // 3. Draw Enemies and friendly defenders
     enemiesManager.draw(this.ctx, this.cameraX, this.cameraY, this.map);
@@ -422,6 +468,21 @@ export class GameEngine {
 
     // 6. Draw visual boundary grid markers on visible tiles (grid lining detail)
     this.drawGridOverlay();
+
+    // 6.2 Draw Aim Reticle Dotted Line
+    if (!this.player.isDead) {
+      this.ctx.save();
+      this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.12)';
+      this.ctx.lineWidth = 1.5;
+      this.ctx.setLineDash([4, 6]);
+      this.ctx.beginPath();
+      const startX = this.player.x - this.cameraX;
+      const startY = this.player.y - this.cameraY;
+      this.ctx.moveTo(startX, startY);
+      this.ctx.lineTo(this.mouseX, this.mouseY);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
 
     // 6.5 Draw Blizzard overlay on top of everything for maximum realism
     if (this.map.blizzardActive) {
@@ -440,6 +501,8 @@ export class GameEngine {
       }
       this.ctx.stroke();
     }
+
+    this.ctx.restore(); // restore screenshake translate
 
     // 7. Draw Tactical Satellite Radar Minimap
     this.drawRadarMinimap();

@@ -14,6 +14,12 @@ vi.mock('./Sound', () => ({
     playPurchase: vi.fn(),
     playShieldRegen: vi.fn(),
     playLaser: vi.fn(),
+    startMusic: vi.fn(),
+    stopMusic: vi.fn(),
+    playDecoyDeploy: vi.fn(),
+    playSniperWarning: vi.fn(),
+    playSniperShoot: vi.fn(),
+    playPickup: vi.fn(),
     toggle: vi.fn(),
     isEnabled: () => false
   }
@@ -122,5 +128,21 @@ describe('Player Logic & Mechanics', () => {
     player.update(200, 0, 0, map);
     // Some explosions should have triggered
     expect(player.queuedExplosions.some(e => e.exploded)).toBe(true);
+  });
+
+  it('should successfully trigger Decoy skill and deduct credits', () => {
+    const player = new Player(100, 100);
+    player.credits = 200; // decoy cost is 150
+    const success = player.triggerDecoy(150, 150);
+    expect(success).toBe(true);
+    expect(player.decoyCooldown).toBe(player.decoyMaxCooldown);
+    expect(player.credits).toBe(50);
+  });
+
+  it('should set screen shake intensity on taking damage', () => {
+    const player = new Player(100, 100);
+    player.screenShake = 0;
+    player.takeDamage(20);
+    expect(player.screenShake).toBeGreaterThan(0);
   });
 });

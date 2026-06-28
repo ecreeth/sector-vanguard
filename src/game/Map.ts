@@ -18,6 +18,21 @@ export class GameMap {
   blizzardTimer: number = 25000;
   blizzardDuration: number = 0;
 
+  // Cyber biome components
+  powerGates: Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    active: boolean;
+    hp: number;
+    maxHp: number;
+    hackTimer: number;
+    isHacked: boolean;
+  }> = [];
+  shieldNodes: Array<{ x: number; y: number; radius: number }> = [];
+
   constructor(biome: string) {
     this.width = 40; // 40 tiles wide
     this.height = 40; // 40 tiles high
@@ -73,6 +88,63 @@ export class GameMap {
     if (biome === 'WASTELAND') {
       this.generateInitialSludge();
     }
+
+    // 8. Generate cyber elements
+    if (biome === 'CYBER') {
+      this.generatePowerGates();
+      this.generateShieldNodes();
+    }
+  }
+
+  private generatePowerGates() {
+    this.powerGates = [];
+    // Define 6 gate locations at specific tile coordinates (ty, tx)
+    const gateCoords = [
+      { x: 10, y: 10 },
+      { x: 15, y: 25 },
+      { x: 25, y: 15 },
+      { x: 30, y: 30 },
+      { x: 12, y: 20 },
+      { x: 20, y: 12 }
+    ];
+
+    gateCoords.forEach((coord, i) => {
+      // Set the tile itself to ROAD/GRASS first so it isn't a WALL tile,
+      // but the gate entity will block collision dynamically while active.
+      this.tiles[coord.y][coord.x] = 'ROAD';
+      
+      this.powerGates.push({
+        id: `gate_${i}`,
+        x: coord.x * this.tileSize + this.tileSize / 2,
+        y: coord.y * this.tileSize + this.tileSize / 2,
+        width: 48,
+        height: 48,
+        active: true,
+        hp: 50,
+        maxHp: 50,
+        hackTimer: 2000, // 2 seconds to hack
+        isHacked: false
+      });
+    });
+  }
+
+  private generateShieldNodes() {
+    this.shieldNodes = [];
+    const nodeCoords = [
+      { x: 6, y: 6 },
+      { x: 14, y: 14 },
+      { x: 26, y: 26 },
+      { x: 34, y: 14 }
+    ];
+
+    nodeCoords.forEach(coord => {
+      this.tiles[coord.y][coord.x] = 'ROAD'; // asphalt floor for node
+      this.shieldNodes.push({
+        x: coord.x * this.tileSize + this.tileSize / 2,
+        y: coord.y * this.tileSize + this.tileSize / 2,
+        radius: 45
+      });
+    });
   }
 
   private generateRivers() {
@@ -287,7 +359,7 @@ export class GameMap {
     }
   }
 
-  update(dt: number, player: { x: number; y: number; takeDamage: (dmg: number) => void; isDead: boolean }) {
+  update(dt: number, player: { x: number; y: number; takeDamage: (dmg: number) => void; isDead: boolean }, onCreditsEarned?: (amount: number) => void) {
     if (this.biome === 'TUNDRA') {
       if (this.blizzardActive) {
         this.blizzardDuration -= dt;
@@ -310,6 +382,32 @@ export class GameMap {
         const dy = player.y - s.y;
         if (dx*dx + dy*dy < s.radius * s.radius) {
           player.takeDamage((8 * dt) / 1000);
+        }
+      });
+    }
+
+    if (this.biome === 'CYBER' && !player.isDead) {
+      this.powerGates.forEach(g => {
+        if (g.active && !g.isHacked) {
+          const dx = player.x - g.x;
+          const dy = player.y - g.y;
+          const distSq = dx*dx + dy*dy;
+          
+          // Hack zone is within 80px range
+          if (distSq < 80 * 80) {
+            g.hackTimer -= dt;
+            if (g.hackTimer <= 0) {
+              g.isHacked = true;
+              g.active = false;
+              if (onCreditsEarned) {
+                onCreditsEarned(50); // Hack reward
+              }
+              sound.playCaptureComplete();
+            }
+          } else {
+            // Decay hack progress if player leaves the area
+            g.hackTimer = Math.min(2000, g.hackTimer + dt);
+          }
         }
       });
     }
@@ -345,6 +443,20 @@ export class GameMap {
         }
       }
     }
+
+    // Also check active power gates
+    for (const g of this.powerGates) {
+      if (g.active) {
+        const dx = px - g.x;
+        const dy = py - g.y;
+        const distSq = dx*dx + dy*dy;
+        const minDist = radius + 24; // gate collision radius
+        if (distSq < minDist * minDist) {
+          return true;
+        }
+      }
+    }
+
     return false;
   }
 
@@ -477,6 +589,14 @@ export class GameMap {
       wallTopColor = '#6c7a8e';
       forestColor = '#708f9c'; // snowy evergreens
       forestLeafColor = '#94b3be';
+    } else if (biome === 'CYBER') {
+      grassColor = '#060b13'; // dark tech grid ground
+      roadColor = '#0d1b2a'; // cyber highway
+      waterColor = '#001933'; // electric flow conduits
+      wallColor = '#1b4965';
+      wallTopColor = '#62b6cb';
+      forestColor = '#092230'; // cyber server lattices
+      forestLeafColor = '#00f2fe';
     }
 
     for (let ty = startTileY; ty <= endTileY; ty++) {
@@ -640,6 +760,86 @@ export class GameMap {
         ctx.stroke();
       }
     });
+
+    // Draw Shield Recharge Nodes
+    if (biome === 'CYBER') {
+      this.shieldNodes.forEach(s => {
+        const screenX = s.x - cameraX;
+        const screenY = s.y - cameraY;
+
+        if (screenX + s.radius > 0 && screenX - s.radius < screenWidth &&
+            screenY + s.radius > 0 && screenY - s.radius < screenHeight) {
+          
+          // Outer glow ring
+          ctx.strokeStyle = 'rgba(57, 255, 20, 0.35)';
+          ctx.lineWidth = 3;
+          ctx.fillStyle = 'rgba(57, 255, 20, 0.05)';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, s.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Pulsing central node core
+          const coreSize = 6 + Math.abs(Math.sin(Date.now() / 200)) * 6;
+          ctx.fillStyle = 'rgba(57, 255, 20, 0.6)';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, coreSize, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Rotating scanline sweep
+          const sweepAngle = (Date.now() / 600) % (Math.PI * 2);
+          ctx.strokeStyle = 'rgba(57, 255, 20, 0.2)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + Math.cos(sweepAngle) * s.radius, screenY + Math.sin(sweepAngle) * s.radius);
+          ctx.stroke();
+        }
+      });
+
+      // Draw Power Gates
+      this.powerGates.forEach(g => {
+        if (!g.active) return;
+        const screenX = g.x - cameraX;
+        const screenY = g.y - cameraY;
+
+        if (screenX + g.width > 0 && screenX - g.width < screenWidth &&
+            screenY + g.height > 0 && screenY - g.height < screenHeight) {
+          
+          // Draw grid pattern block representing the cyber wall laser
+          ctx.fillStyle = 'rgba(0, 242, 254, 0.12)';
+          ctx.fillRect(screenX - g.width / 2, screenY - g.height / 2, g.width, g.height);
+
+          // Glow lines
+          ctx.shadowColor = '#00f2fe';
+          ctx.shadowBlur = 8;
+          ctx.strokeStyle = 'rgba(0, 242, 254, 0.85)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          // Draw diagonal crossed lasers
+          ctx.moveTo(screenX - g.width / 2, screenY - g.height / 2);
+          ctx.lineTo(screenX + g.width / 2, screenY + g.height / 2);
+          ctx.moveTo(screenX - g.width / 2, screenY + g.height / 2);
+          ctx.lineTo(screenX + g.width / 2, screenY - g.height / 2);
+          ctx.stroke();
+          
+          // Draw outer laser bounding box
+          ctx.strokeStyle = '#00f2fe';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(screenX - g.width / 2, screenY - g.height / 2, g.width, g.height);
+          ctx.shadowBlur = 0;
+
+          // Hacking progress bar overlay
+          if (g.hackTimer < 2000) {
+            const progressPercent = (2000 - g.hackTimer) / 2000;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(screenX - 22, screenY - g.height / 2 - 14, 44, 6);
+            ctx.fillStyle = '#00f2fe';
+            ctx.fillRect(screenX - 20, screenY - g.height / 2 - 13, 40 * progressPercent, 4);
+          }
+        }
+      });
+    }
 
     // Blizzard Snow Particle Blusters Overlay (Tundra Biome Blizzard Active)
     if (this.blizzardActive) {

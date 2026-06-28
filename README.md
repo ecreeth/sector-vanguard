@@ -22,6 +22,7 @@
 - **Forest Ruins**: Swamp waters cover paths, slowing down all unit movement speeds by 55%.
 - **Wasteland Sludge**: Green toxic mud pools cover the map. Standing in toxic pools inflicts **8 HP/sec** damage over time. Asphalt roads boost mech speed by 35%.
 - **Frozen Tundra**: random blizzard storms sweep the sector. During blizzards, commando vision radius decays by 50% (from 7 tiles down to 3.5 tiles), making close combat extremely hazardous.
+- **Cyber-Grid Road**: Glowing circular nodes boost shield regeneration (3x regeneration rate, zero recharge delay). Active glowing laser gates block unit passage; players can shoot them down (50 HP) or stand near them to hack and disable them (+50 Credits).
 
 ### 4. Sector Overseer Boss Fight
 - **Victory Condition**: Once all **4 outposts** are player-controlled, the **Sector Overseer** command boss mech drops in the center of the map `(1280, 1280)`.
@@ -59,6 +60,7 @@ Activate powerful commander support abilities on the hotbar (bottom HUD):
 - **`[1]` EMP Blast**: Releases a circular electromagnetic wave, stunning all nearby hostiles for 4 seconds (Cost: 120 CR, Cooldown: 12s).
 - **`[2]` Carpet Airstrike**: Calls in sequential artillery bombings at your mouse cursor coordinates (Cost: 240 CR, Cooldown: 20s).
 - **`[3]` Repair Drone**: Deploys a nanite repair drone to heal the pilot's mech over time for 10 seconds (Cost: 180 CR, Cooldown: 15s).
+- **`[4]` Decoy Mech**: Deploys a stationary hologram decoy (100 HP) drawing enemy aggro for 6 seconds, detonating upon death or expiry for 40 damage in an 80px radius (Cost: 150 CR, Cooldown: 18s).
 
 ---
 
@@ -74,6 +76,7 @@ Activate powerful commander support abilities on the hotbar (bottom HUD):
 | **`1`** | Trigger EMP Blast |
 | **`2`** | Trigger Carpet Airstrike (at Aim Cursor) |
 | **`3`** | Trigger Repair Drone |
+| **`4`** | Deploy Holographic Decoy (at Aim Cursor) |
 | **`ESC` / `P`** | Pause Operations |
 
 ---

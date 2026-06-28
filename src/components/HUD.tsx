@@ -261,7 +261,8 @@ export const HUD: React.FC<HUDProps> = ({
         {([
           { key: '1', label: 'EMP BLAST', cd: skills.empCooldown, cost: skills.empCost, color: '#00f2fe' },
           { key: '2', label: 'AIRSTRIKE', cd: skills.airstrikeCooldown, cost: skills.airstrikeCost, color: '#ff6b35' },
-          { key: '3', label: 'REPAIR DRONE', cd: skills.droneCooldown, cost: skills.droneCost, color: '#39ff14' }
+          { key: '3', label: 'REPAIR DRONE', cd: skills.droneCooldown, cost: skills.droneCost, color: '#39ff14' },
+          { key: '4', label: 'DECOY MECH', cd: skills.decoyCooldown, cost: skills.decoyCost, color: '#c084fc' }
         ]).map(skill => {
           const isReady = skill.cd <= 0;
           const canAfford = credits >= skill.cost;

@@ -265,6 +265,155 @@ class SoundManager {
     osc.start(time);
     osc.stop(time + 0.1);
   }
+
+  private musicIntervalId: any = null;
+  private musicStep: number = 0;
+
+  startMusic() {
+    if (!this.enabled || this.musicIntervalId) return;
+    this.init();
+    if (!this.ctx) return;
+
+    // A nice retro cyberpunk minor progression in A minor / G major
+    const bassline = [110, 110, 130, 130, 146, 146, 98, 98]; // A2, C3, D3, G2
+
+    this.musicStep = 0;
+    this.musicIntervalId = setInterval(() => {
+      if (!this.enabled || !this.ctx) {
+        this.stopMusic();
+        return;
+      }
+      if (this.ctx.state === 'suspended') return;
+
+      try {
+        const time = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        const freq = bassline[this.musicStep % bassline.length];
+        osc.frequency.setValueAtTime(freq, time);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(300, time);
+
+        gain.gain.setValueAtTime(0.015, time); // low volume background hum
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.45);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(time);
+        osc.stop(time + 0.45);
+        this.musicStep++;
+      } catch (err) {
+        // Silently catch audio scheduling errors
+      }
+    }, 500);
+  }
+
+  stopMusic() {
+    if (this.musicIntervalId) {
+      clearInterval(this.musicIntervalId);
+      this.musicIntervalId = null;
+    }
+  }
+
+  playDecoyDeploy() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(600, time + 0.25);
+
+    gain.gain.setValueAtTime(0.08, time);
+    gain.gain.exponentialRampToValueAtTime(0.005, time + 0.25);
+
+    osc.start(time);
+    osc.stop(time + 0.25);
+  }
+
+  playPickup() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+
+    notes.forEach((freq, index) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time + index * 0.04);
+
+      gain.gain.setValueAtTime(0.06, time + index * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + index * 0.04 + 0.1);
+
+      osc.start(time + index * 0.04);
+      osc.stop(time + index * 0.04 + 0.1);
+    });
+  }
+
+  playSniperWarning() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(987.77, time); // B5 high alert
+
+    gain.gain.setValueAtTime(0.04, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+    osc.start(time);
+    osc.stop(time + 0.08);
+  }
+
+  playSniperShoot() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1500, time);
+    osc.frequency.exponentialRampToValueAtTime(300, time + 0.25);
+
+    gain.gain.setValueAtTime(0.08, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+
+    osc.start(time);
+    osc.stop(time + 0.25);
+  }
 }
 
 export const sound = new SoundManager();
