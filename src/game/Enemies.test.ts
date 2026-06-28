@@ -195,17 +195,17 @@ describe('Enemy Types and AI Behaviors', () => {
     guard.update(16, map, player, []);
     expect(guard.targetUnit).toBe(player);
 
-    // Move guard slightly out to chase
-    guard.x = 150;
+    // Move guard beyond 240px leash from home (100, 100)
+    guard.x = 350;
     
-    // 2. Player flees beyond 240px from guard home origin (100, 100) -> player at (350, 100)
-    player.x = 350;
+    // 2. Player is still nearby the guard but guard is too far from home
+    player.x = 380;
     guard.update(16, map, player, []);
     
-    // Guard should drop target lock!
+    // Guard should drop target lock because it's beyond 240px from home!
     expect(guard.targetUnit).toBeNull();
     
-    // 3. Since guard has no target and is far from home (150, 100), update should steer them home (homeDx < 0)
+    // 3. Since guard has no target and is far from home, update should steer them home (homeDx < 0)
     expect(guard.vx).toBeLessThan(0);
   });
 

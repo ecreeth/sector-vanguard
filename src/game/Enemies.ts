@@ -370,43 +370,37 @@ export class Enemy {
       const distToPlayer = Math.sqrt(dxPlayer*dxPlayer + dyPlayer*dyPlayer);
 
       if (this.isGuard) {
-        // Leashed target selection: target must be within 240px of home location (patrolX, patrolY)
-        const dxHomePlayer = player.x - this.patrolX;
-        const dyHomePlayer = player.y - this.patrolY;
-        const distHomePlayer = Math.sqrt(dxHomePlayer*dxHomePlayer + dyHomePlayer*dyHomePlayer);
-
-        let targetDefender: Enemy | null = null;
-        let minDefDist = 240; // max leash distance from home
-
-        otherEnemies.forEach(e => {
-          if (e.isFriendly && !e.isDead) {
-            const dxHomeDef = e.x - this.patrolX;
-            const dyHomeDef = e.y - this.patrolY;
-            const distHomeDef = Math.sqrt(dxHomeDef*dxHomeDef + dyHomeDef*dyHomeDef);
-            if (distHomeDef < minDefDist) {
-              const dxMeDef = e.x - this.x;
-              const dyMeDef = e.y - this.y;
-              const distMeDef = Math.sqrt(dxMeDef*dxMeDef + dyMeDef*dyMeDef);
-              if (distMeDef < this.visionRange) {
-                minDefDist = distHomeDef;
-                targetDefender = e;
-              }
-            }
-          }
-        });
-
-        // Also ensure guard itself isn't pulled way too far
+        // Guard leash: guards can see and target within normal visionRange,
+        // but won't chase if they've been pulled too far from home (240px).
         const myDxHome = this.x - this.patrolX;
         const myDyHome = this.y - this.patrolY;
         const myDistHome = Math.sqrt(myDxHome*myDxHome + myDyHome*myDyHome);
 
         if (myDistHome > 240) {
-          // Exceeded leash range: drop all targets
+          // Exceeded leash range: drop all targets and return home
           this.targetUnit = null;
-        } else if (targetDefender) {
-          this.targetUnit = targetDefender;
-        } else if (distHomePlayer < 240 && distToPlayer < this.visionRange && !player.isDead) {
-          this.targetUnit = player;
+        } else {
+          // Normal target selection within vision range
+          let closestDefender: Enemy | null = null;
+          let minDefDist = this.visionRange;
+
+          otherEnemies.forEach(e => {
+            if (e.isFriendly && !e.isDead) {
+              const dxMeDef = e.x - this.x;
+              const dyMeDef = e.y - this.y;
+              const distMeDef = Math.sqrt(dxMeDef*dxMeDef + dyMeDef*dyMeDef);
+              if (distMeDef < minDefDist) {
+                minDefDist = distMeDef;
+                closestDefender = e;
+              }
+            }
+          });
+
+          if (closestDefender) {
+            this.targetUnit = closestDefender;
+          } else if (distToPlayer < this.visionRange && !player.isDead) {
+            this.targetUnit = player;
+          }
         }
       } else {
         // Roaming hostile units: standard target selection
