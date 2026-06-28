@@ -141,21 +141,39 @@ describe('Enemy Types and AI Behaviors', () => {
     expect(defender.vx).toBeGreaterThan(0);
   });
 
-  it('should block all damage to Shield Mech when hit from the front and bypass when hit from behind', () => {
+  it('should absorb front damage into shieldHp and allow damage when shield breaks', () => {
     const shieldMech = new Enemy(100, 100, 'SHIELD_MECH', false);
     // Facing player (facing to the right towards player at 150, 100)
     shieldMech.vx = 1;
     shieldMech.vy = 0;
     
-    // 1. Hit from the front (where player is)
     enemiesManager.playerRef = { x: 150, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
-    shieldMech.takeDamage(30);
-    expect(shieldMech.hp).toBe(100); // blocked!
 
-    // 2. Hit from behind (player at 50, 100)
+    // 1. Hit from front — shield absorbs damage
+    shieldMech.takeDamage(30);
+    expect(shieldMech.shieldHp).toBe(30); // 60 - 30
+    expect(shieldMech.hp).toBe(100); // body untouched
+
+    // 2. Another hit breaks the shield
+    shieldMech.takeDamage(30);
+    expect(shieldMech.shieldHp).toBe(0);
+    expect(shieldMech.hp).toBe(100); // still untouched, shield just broke
+
+    // 3. Next hit from front penetrates — shield is gone
+    shieldMech.takeDamage(40);
+    expect(shieldMech.hp).toBe(60); // 100 - 40
+  });
+
+  it('should take normal damage from behind regardless of shieldHp', () => {
+    const shieldMech = new Enemy(100, 100, 'SHIELD_MECH', false);
+    shieldMech.vx = 1;
+    shieldMech.vy = 0;
+    
+    // Player behind the shield mech (to the left)
     enemiesManager.playerRef = { x: 50, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
     shieldMech.takeDamage(30);
-    expect(shieldMech.hp).toBe(70); // damaged!
+    expect(shieldMech.hp).toBe(70); // 100 - 30
+    expect(shieldMech.shieldHp).toBe(60); // shield untouched
   });
 
   it('should periodically spawn drones/suicides from active portals', () => {

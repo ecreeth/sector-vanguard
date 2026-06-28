@@ -48,6 +48,8 @@ export class Enemy {
   plasmaBurnTicks: number = 0;
   plasmaBurnTimer: number = 0;
   alertedTimer: number = 0;
+  shieldHp: number = 0;
+  maxShieldHp: number = 0;
 
   applyPlasmaBurn(level: number) {
     if (this.isDead) return;
@@ -149,6 +151,8 @@ export class Enemy {
         this.shootDelay = 1200;
         this.damage = 10;
         this.visionRange = 220;
+        this.maxShieldHp = 60;
+        this.shieldHp = 60;
         break;
       case 'PORTAL':
         this.radius = 24;
@@ -187,10 +191,18 @@ export class Enemy {
         while (diff > Math.PI) diff -= Math.PI * 2;
         
         if (Math.abs(diff) < Math.PI / 2) {
-          // Hit from front! Block damage completely!
-          projectilesManager.spawnSparks(this.x + Math.cos(facingAngle) * 18, this.y + Math.sin(facingAngle) * 18, '#00f2fe', 4);
-          projectilesManager.spawnText(this.x, this.y - 15, 'BLOCKED', '#00f2fe');
-          return;
+          // Hit from front — absorb into shield HP
+          if (this.shieldHp > 0) {
+            this.shieldHp = Math.max(0, this.shieldHp - amount);
+            projectilesManager.spawnSparks(this.x + Math.cos(facingAngle) * 18, this.y + Math.sin(facingAngle) * 18, '#00f2fe', 4);
+            projectilesManager.spawnText(this.x, this.y - 15, `SHIELD ${Math.ceil(this.shieldHp)}/${this.maxShieldHp}`, '#00f2fe');
+            if (this.shieldHp <= 0) {
+              projectilesManager.spawnText(this.x, this.y - 30, 'SHIELD DOWN', '#f97316');
+              projectilesManager.spawnShockwave(this.x, this.y, 50, '#f97316', 200);
+            }
+            return;
+          }
+          // Shield broken — take full damage
         }
       }
     }
@@ -1327,12 +1339,18 @@ export class Enemy {
           shieldMechAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
         }
 
-        // Draw thick front glowing shield plate
-        ctx.strokeStyle = '#00f2fe';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, this.radius + 8, shieldMechAngle - Math.PI / 3, shieldMechAngle + Math.PI / 3);
-        ctx.stroke();
+        // Draw front shield plate — opacity scales with shield HP
+        if (this.maxShieldHp > 0 && this.shieldHp > 0) {
+          const shieldRatio = this.shieldHp / this.maxShieldHp;
+          const shieldColor = shieldRatio > 0.5 ? '#00f2fe' : '#f97316';
+          ctx.strokeStyle = shieldColor;
+          ctx.lineWidth = 2 + shieldRatio * 3;
+          ctx.globalAlpha = 0.3 + shieldRatio * 0.7;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, this.radius + 8, shieldMechAngle - Math.PI / 3, shieldMechAngle + Math.PI / 3);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
 
         // Glowing red eye visor
         ctx.fillStyle = '#ef4444';
