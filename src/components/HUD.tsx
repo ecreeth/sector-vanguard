@@ -19,6 +19,8 @@ interface HUDProps {
   onToggleCrt: () => void;
   onPause: () => void;
   onQuit: () => void;
+  onBuyUpgrade: (type: 'HEALTH' | 'SHIELD' | 'DASH') => void;
+  onBuildTurret: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -30,11 +32,16 @@ export const HUD: React.FC<HUDProps> = ({
   crtEnabled,
   onToggleCrt,
   onPause,
-  onQuit
+  onQuit,
+  onBuyUpgrade,
+  onBuildTurret
 }) => {
-  const { health, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons } = stats;
+  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades } = stats;
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  const healthPercent = (health / maxHealth) * 100;
+  const shieldPercent = maxShield > 0 ? (shield / maxShield) * 100 : 0;
 
   return (
     <div style={hudStyles.container} className="hud-root">
@@ -133,11 +140,11 @@ export const HUD: React.FC<HUDProps> = ({
               <Heart size={14} color="var(--neon-red)" style={{ marginRight: 6 }} />
               <span>CORE INTEGRITY</span>
               <span style={{ marginLeft: 'auto', color: 'var(--neon-red)', fontWeight: 'bold' }}>
-                {health}%
+                {health} / {maxHealth}
               </span>
             </div>
             <div style={hudStyles.vitalBarBg}>
-              <div style={{ ...hudStyles.vitalBarFill, width: `${health}%`, backgroundColor: 'var(--neon-red)' }} />
+              <div style={{ ...hudStyles.vitalBarFill, width: `${healthPercent}%`, backgroundColor: 'var(--neon-red)' }} />
             </div>
           </div>
 
@@ -151,7 +158,7 @@ export const HUD: React.FC<HUDProps> = ({
               </span>
             </div>
             <div style={hudStyles.vitalBarBg}>
-              <div style={{ ...hudStyles.vitalBarFill, width: `${(shield / maxShield) * 100}%`, backgroundColor: 'var(--neon-cyan)' }} />
+              <div style={{ ...hudStyles.vitalBarFill, width: `${shieldPercent}%`, backgroundColor: 'var(--neon-cyan)' }} />
             </div>
           </div>
 
@@ -185,10 +192,159 @@ export const HUD: React.FC<HUDProps> = ({
             <span>TECH CREDITS:</span>
             <span style={hudStyles.creditsAmount}>{credits} CR</span>
           </div>
+
+          {/* Command Terminal Upgrades */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 6 }}>
+              COMMAND TERMINAL
+            </div>
+            {([
+              { type: 'HEALTH' as const, label: 'MAX HP', lvl: upgrades.healthLvl, cost: upgrades.healthCost, color: 'var(--neon-red)' },
+              { type: 'SHIELD' as const, label: 'MAX SHIELD', lvl: upgrades.shieldLvl, cost: upgrades.shieldCost, color: 'var(--neon-cyan)' },
+              { type: 'DASH' as const, label: 'DASH CDR', lvl: upgrades.dashLvl, cost: upgrades.dashCost, color: 'var(--neon-green)' }
+            ]).map(u => (
+              <div key={u.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '11px', color: u.color, fontWeight: 'bold' }}>{u.label}</span>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    {'▰'.repeat(u.lvl)}{'▱'.repeat(4 - u.lvl)}
+                  </span>
+                </div>
+                {u.lvl < 4 ? (
+                  <button
+                    onClick={() => onBuyUpgrade(u.type)}
+                    disabled={credits < u.cost}
+                    style={{
+                      ...hudStyles.shopBuyBtn,
+                      borderColor: u.color,
+                      color: u.color,
+                      opacity: credits >= u.cost ? 1 : 0.35,
+                      cursor: credits >= u.cost ? 'pointer' : 'not-allowed',
+                      fontSize: '10px',
+                      padding: '2px 7px'
+                    }}
+                  >
+                    {u.cost} CR
+                  </button>
+                ) : (
+                  <span style={{ fontSize: '10px', color: 'var(--neon-green)', fontWeight: 'bold' }}>MAX</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Build Turret Button */}
+          <button
+            onClick={onBuildTurret}
+            disabled={credits < 200}
+            style={{
+              ...hudStyles.shopBuyBtn,
+              width: '100%',
+              padding: '6px 0',
+              borderColor: credits >= 200 ? '#f97316' : 'var(--border-color)',
+              color: credits >= 200 ? '#f97316' : 'var(--text-muted)',
+              cursor: credits >= 200 ? 'pointer' : 'not-allowed',
+              opacity: credits >= 200 ? 1 : 0.4,
+              fontSize: '11px',
+              letterSpacing: '1px',
+              marginTop: 4,
+              textAlign: 'center'
+            }}
+          >
+            🔫 BUILD BASE TURRET — 200 CR
+          </button>
         </div>
       )}
 
-      {/* 3. BOTTOM RIGHT SHOP & WEAPONS CARD */}
+      {/* 3. BOTTOM CENTER SKILLS HOTBAR */}
+      <div style={hudStyles.skillsBar} className="hud-panel">
+        {([
+          { key: '1', label: 'EMP BLAST', cd: skills.empCooldown, cost: skills.empCost, color: '#00f2fe' },
+          { key: '2', label: 'AIRSTRIKE', cd: skills.airstrikeCooldown, cost: skills.airstrikeCost, color: '#ff6b35' },
+          { key: '3', label: 'REPAIR DRONE', cd: skills.droneCooldown, cost: skills.droneCost, color: '#39ff14' }
+        ]).map(skill => {
+          const isReady = skill.cd <= 0;
+          const canAfford = credits >= skill.cost;
+          const usable = isReady && canAfford;
+          return (
+            <div key={skill.key} style={{
+              ...hudStyles.skillSlot,
+              borderColor: usable ? skill.color : 'rgba(255,255,255,0.08)',
+              boxShadow: usable ? `0 0 8px ${skill.color}40` : 'none',
+              opacity: usable ? 1 : 0.55
+            }}>
+              <div style={{ fontSize: '16px', fontWeight: 'bold', color: skill.color, lineHeight: 1 }}>[{skill.key}]</div>
+              <div style={{ fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', color: 'var(--text-primary)', marginTop: 2 }}>
+                {skill.label}
+              </div>
+              {!isReady ? (
+                <div style={{ fontSize: '10px', color: 'var(--neon-yellow)', marginTop: 2 }}>
+                  {Math.ceil(skill.cd * 100)}%
+                </div>
+              ) : (
+                <div style={{ fontSize: '10px', color: canAfford ? skill.color : 'var(--neon-red)', marginTop: 2 }}>
+                  {skill.cost} CR
+                </div>
+              )}
+              {/* Cooldown sweep overlay */}
+              {!isReady && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${Math.min(100, skill.cd * 100)}%`,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: '4px',
+                  pointerEvents: 'none'
+                }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 4. BOSS HEALTH BAR (shown only when boss is active) */}
+      {stats.bossActive && stats.bossMaxHp > 0 && (
+        <div style={hudStyles.bossBar} className="hud-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <span style={{ 
+              fontSize: '13px', 
+              fontWeight: 'bold', 
+              letterSpacing: '2px',
+              color: '#ef4444',
+              textShadow: '0 0 8px rgba(239, 68, 68, 0.5)'
+            }}>
+              ⚠ SECTOR OVERSEER
+            </span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '10px',
+            backgroundColor: '#0c0d14',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '5px',
+            overflow: 'hidden',
+            marginTop: 5
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${(stats.bossHp / stats.bossMaxHp) * 100}%`,
+              background: stats.bossHp > stats.bossMaxHp * 0.3
+                ? 'linear-gradient(90deg, #ef4444, #f97316)'
+                : 'linear-gradient(90deg, #dc2626, #b91c1c)',
+              borderRadius: '5px',
+              transition: 'width 0.15s linear',
+              boxShadow: '0 0 6px rgba(239, 68, 68, 0.5)'
+            }} />
+          </div>
+          <div style={{ textAlign: 'center', fontSize: '11px', color: '#fca5a5', marginTop: 3, fontWeight: 'bold' }}>
+            {stats.bossHp} / {stats.bossMaxHp} HP
+          </div>
+        </div>
+      )}
+
+      {/* 5. BOTTOM RIGHT SHOP & WEAPONS CARD */}
       {rightCollapsed ? (
         <button
           onClick={() => setRightCollapsed(false)}
@@ -344,7 +500,7 @@ const hudStyles: Record<string, React.CSSProperties> = {
     padding: '14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
     pointerEvents: 'auto'
   },
   panelTitle: {
@@ -414,9 +570,9 @@ const hudStyles: Record<string, React.CSSProperties> = {
   creditsDisplay: {
     display: 'flex',
     alignItems: 'center',
-    marginTop: '6px',
+    marginTop: '4px',
     borderTop: '1px dashed var(--border-color)',
-    paddingTop: '10px',
+    paddingTop: '8px',
     fontSize: '12px',
     fontWeight: 'bold',
     color: 'var(--text-secondary)'
@@ -489,5 +645,42 @@ const hudStyles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     borderRadius: '2px',
     transition: 'all 0.2s'
+  },
+
+  // Skills Hotbar
+  skillsBar: {
+    position: 'absolute',
+    bottom: '16px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    gap: '10px',
+    padding: '8px 14px',
+    pointerEvents: 'auto'
+  },
+  skillSlot: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '76px',
+    height: '65px',
+    border: '1px solid',
+    borderRadius: '5px',
+    background: 'rgba(0, 0, 0, 0.45)',
+    overflow: 'hidden',
+    transition: 'all 0.2s'
+  },
+
+  // Boss Health Bar
+  bossBar: {
+    position: 'absolute',
+    top: '70px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '360px',
+    padding: '8px 16px',
+    pointerEvents: 'none'
   }
 };

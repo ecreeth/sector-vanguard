@@ -3,7 +3,7 @@ import { projectilesManager } from './Projectiles';
 import { sound } from './Sound';
 import { basesManager } from './Bases';
 
-export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER';
+export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER' | 'BOSS';
 
 export class Enemy {
   x: number;
@@ -31,6 +31,10 @@ export class Enemy {
 
   isDead: boolean = false;
 
+  // Stun states and Boss triggers
+  stunTimer: number = 0;
+  bossSpawnsDone: Record<number, boolean> = { 600: false, 400: false, 200: false };
+
   constructor(x: number, y: number, type: EnemyType, isFriendly: boolean) {
     this.x = x;
     this.y = y;
@@ -42,6 +46,15 @@ export class Enemy {
     this.patrolY = y;
 
     switch (type) {
+      case 'BOSS':
+        this.radius = 35;
+        this.hp = 800;
+        this.maxHp = 800;
+        this.speed = 1.2;
+        this.shootDelay = 1800; // rings of fire
+        this.damage = 10;
+        this.visionRange = 550;
+        break;
       case 'DRONE':
         this.radius = 15;
         this.hp = 35;
@@ -83,8 +96,39 @@ export class Enemy {
 
   takeDamage(amount: number) {
     if (this.isDead) return;
+
+    // Boss shield mechanic: absorbs 60% of damage when below 50% HP (400 HP)
+    if (this.type === 'BOSS' && this.hp < 400) {
+      amount = amount * 0.4;
+      projectilesManager.spawnSparks(this.x, this.y, '#00f2fe', 6);
+    }
+
     this.hp = Math.max(0, this.hp - amount);
     sound.playHit();
+
+    // Trigger Boss Drone waves
+    if (this.type === 'BOSS' && !this.isDead) {
+      if (this.hp <= 600 && !this.bossSpawnsDone[600]) {
+        this.bossSpawnsDone[600] = true;
+        enemiesManager.spawnEnemy(this.x - 50, this.y - 30, 'DRONE');
+        enemiesManager.spawnEnemy(this.x + 50, this.y + 30, 'DRONE');
+        sound.playShieldRegen();
+      }
+      if (this.hp <= 400 && !this.bossSpawnsDone[400]) {
+        this.bossSpawnsDone[400] = true;
+        enemiesManager.spawnEnemy(this.x - 60, this.y, 'DRONE');
+        enemiesManager.spawnEnemy(this.x + 60, this.y, 'DRONE');
+        sound.playShieldRegen();
+      }
+      if (this.hp <= 200 && !this.bossSpawnsDone[200]) {
+        this.bossSpawnsDone[200] = true;
+        enemiesManager.spawnEnemy(this.x - 60, this.y - 30, 'DRONE');
+        enemiesManager.spawnEnemy(this.x + 60, this.y + 30, 'DRONE');
+        enemiesManager.spawnEnemy(this.x, this.y - 60, 'DRONE');
+        sound.playShieldRegen();
+      }
+    }
+
     if (this.hp <= 0) {
       this.isDead = true;
       projectilesManager.spawnExplosionParticles(this.x, this.y, this.radius * 1.5);
@@ -99,6 +143,14 @@ export class Enemy {
     otherEnemies: Enemy[]
   ) {
     if (this.isDead) return;
+
+    // Process EMP stun
+    if (this.stunTimer > 0) {
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
+      this.vx = 0;
+      this.vy = 0;
+      return;
+    }
 
     // 1. Manage Cooldowns
     if (this.shootCooldown > 0) {
@@ -389,7 +441,23 @@ export class Enemy {
   }
 
   shoot(angle: number) {
-    if (this.type === 'MECH') {
+    if (this.type === 'BOSS') {
+      // Ring of 10 red bullets
+      const bulletCount = 10;
+      for (let i = 0; i < bulletCount; i++) {
+        const theta = angle + (i / bulletCount) * Math.PI * 2;
+        projectilesManager.spawnBullet(
+          this.x + Math.cos(theta) * (this.radius + 8),
+          this.y + Math.sin(theta) * (this.radius + 8),
+          theta,
+          8,
+          this.damage,
+          this.isFriendly,
+          '#ff0055',
+          4.5
+        );
+      }
+    } else if (this.type === 'MECH') {
       // Slow large explosive rocket
       projectilesManager.spawnBullet(
         this.x + Math.cos(angle) * (this.radius + 8),
@@ -513,6 +581,77 @@ export class Enemy {
         ctx.arc(screenX + Math.cos(walkAngle) * (this.radius - 4), screenY + Math.sin(walkAngle) * (this.radius - 4), 3, 0, Math.PI * 2);
         ctx.fill();
         break;
+
+      case 'BOSS':
+        // Big heavy command mech chassis
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#ff0055';
+        ctx.lineWidth = 4;
+        
+        ctx.beginPath();
+        // Octagon shape
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI) / 4;
+          const px = screenX + Math.cos(angle) * this.radius;
+          const py = screenY + Math.sin(angle) * this.radius;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner glowing core
+        const coreBlink = 0.5 + Math.abs(Math.sin(Date.now() / 150)) * 0.5;
+        ctx.fillStyle = `rgba(255, 0, 85, ${coreBlink})`;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dual heavy plasma weapons
+        let bossAngle = Date.now() / 800; // slow sweep default
+        if (this.targetUnit) {
+          bossAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
+        }
+
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        // Left gun
+        ctx.moveTo(screenX + Math.cos(bossAngle - 0.4) * 15, screenY + Math.sin(bossAngle - 0.4) * 15);
+        ctx.lineTo(screenX + Math.cos(bossAngle - 0.4) * (this.radius + 15), screenY + Math.sin(bossAngle - 0.4) * (this.radius + 15));
+        // Right gun
+        ctx.moveTo(screenX + Math.cos(bossAngle + 0.4) * 15, screenY + Math.sin(bossAngle + 0.4) * 15);
+        ctx.lineTo(screenX + Math.cos(bossAngle + 0.4) * (this.radius + 15), screenY + Math.sin(bossAngle + 0.4) * (this.radius + 15));
+        ctx.stroke();
+
+        // If shield phase is active (< 50% health), draw a glowing blue barrier in front!
+        if (this.hp < 400) {
+          ctx.strokeStyle = 'rgba(0, 242, 254, 0.7)';
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          // Draw a semi-circle shield facing the angle of aiming
+          ctx.arc(screenX, screenY, this.radius + 10, bossAngle - Math.PI/3, bossAngle + Math.PI/3);
+          ctx.stroke();
+        }
+        break;
+    }
+
+    // EMP stun electrical visual overlay
+    if (this.stunTimer > 0) {
+      ctx.strokeStyle = '#00f2fe';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const sx = screenX + (Math.random() - 0.5) * this.radius * 1.5;
+        const sy = screenY + (Math.random() - 0.5) * this.radius * 1.5;
+        const ex = screenX + (Math.random() - 0.5) * this.radius * 1.5;
+        const ey = screenY + (Math.random() - 0.5) * this.radius * 1.5;
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + (ex-sx)/2 + (Math.random()-0.5)*8, sy + (ey-sy)/2 + (Math.random()-0.5)*8);
+        ctx.lineTo(ex, ey);
+      }
+      ctx.stroke();
     }
 
     // Health bar above unit if damaged

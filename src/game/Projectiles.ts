@@ -111,6 +111,34 @@ export class ProjectilesManager {
       const nextX = proj.x + proj.vx * (dt / 16.66);
       const nextY = proj.y + proj.vy * (dt / 16.66);
 
+      // Check explosive barrel collision
+      let hitBarrel = false;
+      for (const b of map.barrels) {
+        if (!b.isDead) {
+          const dx = nextX - b.x;
+          const dy = nextY - b.y;
+          const distSq = dx*dx + dy*dy;
+          const minDist = proj.radius + 14;
+          if (distSq < minDist * minDist) {
+            b.hp -= proj.damage;
+            this.spawnSparks(proj.x, proj.y, '#ef4444', 6);
+            hitBarrel = true;
+            if (b.hp <= 0) {
+              b.isDead = true;
+              const pt = collisionTargets.find(t => t.isPlayer);
+              const playerRef = pt ? { x: pt.x, y: pt.y, takeDamage: pt.takeDamage, isDead: false } : undefined;
+              map.detonateBarrel(b.x, b.y, playerRef);
+            }
+            break;
+          }
+        }
+      }
+
+      if (hitBarrel) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
       // Check wall collision
       if (map.collides(nextX, nextY, proj.radius)) {
         this.spawnSparks(proj.x, proj.y, proj.color, 6);

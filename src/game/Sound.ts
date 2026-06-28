@@ -217,6 +217,54 @@ class SoundManager {
       osc.stop(time + index * 0.06 + 0.15);
     });
   }
+
+  // Rising sweep alarm (EMP, Boss alarm, shield regen cue)
+  playShieldRegen() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, time);
+    osc.frequency.exponentialRampToValueAtTime(880, time + 0.35);
+
+    gain.gain.setValueAtTime(0.12, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+
+    osc.start(time);
+    osc.stop(time + 0.4);
+  }
+
+  // Quick laser zap (base turret fire)
+  playLaser() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1200, time);
+    osc.frequency.exponentialRampToValueAtTime(200, time + 0.1);
+
+    gain.gain.setValueAtTime(0.06, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+
+    osc.start(time);
+    osc.stop(time + 0.1);
+  }
 }
 
 export const sound = new SoundManager();

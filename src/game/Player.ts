@@ -1,6 +1,8 @@
 import type { Weapon, WeaponType, PlayerStats } from './Types';
 import type { GameMap } from './Map';
 import { sound } from './Sound';
+import { enemiesManager } from './Enemies';
+import { projectilesManager } from './Projectiles';
 
 export class Player {
   x: number;
@@ -64,6 +66,34 @@ export class Player {
   dashDirY: number = 0;
 
   isDead: boolean = false;
+
+  // Expansion Upgrades & Skills variables
+  healthLvl: number = 0;
+  shieldLvl: number = 0;
+  dashLvl: number = 0;
+
+  empCooldown: number = 0;
+  airstrikeCooldown: number = 0;
+  droneCooldown: number = 0;
+
+  empMaxCooldown: number = 12000;
+  airstrikeMaxCooldown: number = 20000;
+  droneMaxCooldown: number = 15000;
+
+  empCost: number = 120;
+  airstrikeCost: number = 240;
+  droneCost: number = 180;
+
+  repairDroneDuration: number = 0;
+
+  queuedExplosions: Array<{
+    x: number;
+    y: number;
+    delay: number;
+    exploded: boolean;
+    radius: number;
+    damage: number;
+  }> = [];
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -174,6 +204,48 @@ export class Player {
       this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     }
 
+    // Active skills cooldowns tick
+    if (this.empCooldown > 0) this.empCooldown = Math.max(0, this.empCooldown - dt);
+    if (this.airstrikeCooldown > 0) this.airstrikeCooldown = Math.max(0, this.airstrikeCooldown - dt);
+    if (this.droneCooldown > 0) this.droneCooldown = Math.max(0, this.droneCooldown - dt);
+
+    // Repair drone healing ticks
+    if (this.repairDroneDuration > 0) {
+      this.repairDroneDuration = Math.max(0, this.repairDroneDuration - dt);
+      this.health = Math.min(this.maxHealth, this.health + (12 * dt) / 1000); // 12 hp/sec
+      if (Math.random() < 0.12) {
+        projectilesManager.spawnSparks(this.x + (Math.random()-0.5)*32, this.y + (Math.random()-0.5)*32, '#39ff14', 2);
+      }
+    }
+
+    // Process queued Airstrike explosions
+    this.queuedExplosions.forEach(exp => {
+      if (exp.exploded) return;
+      exp.delay -= dt;
+      if (exp.delay <= 0) {
+        exp.exploded = true;
+        sound.playExplosion();
+
+        // Damage enemies in target radius
+        enemiesManager.enemies.forEach(e => {
+          if (!e.isFriendly && !e.isDead) {
+            const dx = e.x - exp.x;
+            const dy = e.y - exp.y;
+            if (dx*dx + dy*dy < exp.radius * exp.radius) {
+              e.takeDamage(exp.damage);
+            }
+          }
+        });
+
+        // Trigger visual spark bursts
+        projectilesManager.spawnSparks(exp.x, exp.y, '#ffe600', 16);
+        projectilesManager.spawnSparks(exp.x, exp.y, '#ff3300', 12);
+      }
+    });
+
+    // Clean up fully exploded nodes
+    this.queuedExplosions = this.queuedExplosions.filter(exp => !exp.exploded || exp.delay > -400);
+
     // 2. Shield Regeneration
     if (this.shieldRegenTimer > 0) {
       this.shieldRegenTimer = Math.max(0, this.shieldRegenTimer - dt);
@@ -229,6 +301,8 @@ export class Player {
     const currentWep = this.weapons[this.currentWeaponType];
     const dashCooldPercent = this.dashCooldown > 0 ? this.dashCooldown / this.dashMaxCooldown : 0;
     
+    const boss = enemiesManager.enemies.find(e => e.type === 'BOSS' && !e.isDead);
+
     return {
       health: Math.ceil(this.health),
       maxHealth: this.maxHealth,
@@ -242,12 +316,88 @@ export class Player {
       weapons: this.weapons,
       capturedBasesCount: capturedCount,
       totalBasesCount: totalBases,
-      isDead: this.isDead
+      isDead: this.isDead,
+
+      skills: {
+        empCooldown: this.empCooldown > 0 ? this.empCooldown / this.empMaxCooldown : 0,
+        airstrikeCooldown: this.airstrikeCooldown > 0 ? this.airstrikeCooldown / this.airstrikeMaxCooldown : 0,
+        droneCooldown: this.droneCooldown > 0 ? this.droneCooldown / this.droneMaxCooldown : 0,
+        empCost: this.empCost,
+        airstrikeCost: this.airstrikeCost,
+        droneCost: this.droneCost
+      },
+      upgrades: {
+        healthLvl: this.healthLvl,
+        shieldLvl: this.shieldLvl,
+        dashLvl: this.dashLvl,
+        healthCost: this.healthLvl < 4 ? 120 + this.healthLvl * 60 : 0,
+        shieldCost: this.shieldLvl < 4 ? 100 + this.shieldLvl * 50 : 0,
+        dashCost: this.dashLvl < 4 ? 150 + this.dashLvl * 75 : 0
+      },
+      bossActive: !!boss,
+      bossHp: boss ? Math.ceil(boss.hp) : 0,
+      bossMaxHp: boss ? boss.maxHp : 0
     };
   }
 
   draw(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
     if (this.isDead) return;
+
+    // Draw Airstrike explosion rings on map
+    this.queuedExplosions.forEach(exp => {
+      if (exp.exploded && exp.delay > -350) {
+        const screenExpX = exp.x - cameraX;
+        const screenExpY = exp.y - cameraY;
+        const age = -exp.delay; // 0 to 350ms
+        const percent = Math.min(1, age / 350);
+
+        ctx.strokeStyle = `rgba(255, 68, 0, ${1 - percent})`;
+        ctx.lineWidth = 3 * (1 - percent);
+        ctx.beginPath();
+        ctx.arc(screenExpX, screenExpY, exp.radius * percent, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(255, 150, 0, ${0.3 * (1 - percent)})`;
+        ctx.beginPath();
+        ctx.arc(screenExpX, screenExpY, exp.radius * percent * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Draw Repair Drone hover bot
+    if (this.repairDroneDuration > 0) {
+      const time = Date.now() / 220;
+      const droneX = this.x + Math.cos(time) * 34;
+      const droneY = this.y + Math.sin(time) * 34;
+
+      const screenDX = droneX - cameraX;
+      const screenDY = droneY - cameraY;
+      const screenPX = this.x - cameraX;
+      const screenPY = this.y - cameraY;
+
+      // Pulse green beam link
+      ctx.strokeStyle = 'rgba(57, 255, 20, 0.45)';
+      ctx.lineWidth = 2 + Math.sin(Date.now() / 60) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(screenDX, screenDY);
+      ctx.lineTo(screenPX, screenPY);
+      ctx.stroke();
+
+      // Drone frame
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#39ff14';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(screenDX, screenDY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Drone engine core
+      ctx.fillStyle = '#39ff14';
+      ctx.beginPath();
+      ctx.arc(screenDX, screenDY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     const screenX = this.x - cameraX;
     const screenY = this.y - cameraY;
@@ -294,5 +444,108 @@ export class Player {
     ctx.moveTo(screenX + Math.cos(this.angle) * 10, screenY + Math.sin(this.angle) * 10);
     ctx.lineTo(screenX + Math.cos(this.angle) * (this.radius + 6), screenY + Math.sin(this.angle) * (this.radius + 6));
     ctx.stroke();
+  }
+
+  // Active Skill Activations
+  triggerEMP(): boolean {
+    if (this.isDead || this.empCooldown > 0 || this.credits < this.empCost) return false;
+    this.credits -= this.empCost;
+    this.empCooldown = this.empMaxCooldown;
+    sound.playShieldRegen(); // synth a nice rising sweep charger
+
+    // Stun enemies in a 240px circle
+    enemiesManager.enemies.forEach(e => {
+      if (!e.isFriendly && !e.isDead) {
+        const dx = e.x - this.x;
+        const dy = e.y - this.y;
+        if (dx*dx + dy*dy < 240*240) {
+          e.stunTimer = 4000; // 4 seconds stun lockout
+          projectilesManager.spawnSparks(e.x, e.y, '#00f2fe', 12);
+        }
+      }
+    });
+
+    // Spawn EMP radial wave particles
+    for (let i = 0; i < 28; i++) {
+      const angle = (i / 28) * Math.PI * 2;
+      const vx = Math.cos(angle) * 5.5;
+      const vy = Math.sin(angle) * 5.5;
+      projectilesManager.spawnSparks(
+        this.x + vx * 2,
+        this.y + vy * 2,
+        '#00f2fe',
+        3
+      );
+    }
+
+    return true;
+  }
+
+  triggerAirstrike(tx: number, ty: number): boolean {
+    if (this.isDead || this.airstrikeCooldown > 0 || this.credits < this.airstrikeCost) return false;
+    this.credits -= this.airstrikeCost;
+    this.airstrikeCooldown = this.airstrikeMaxCooldown;
+
+    // Queue 6 airstrike blasts near the target coords
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * 110;
+      this.queuedExplosions.push({
+        x: tx + Math.cos(angle) * r,
+        y: ty + Math.sin(angle) * r,
+        delay: i * 220,
+        exploded: false,
+        radius: 80,
+        damage: 90
+      });
+    }
+
+    return true;
+  }
+
+  triggerRepairDrone(): boolean {
+    if (this.isDead || this.droneCooldown > 0 || this.credits < this.droneCost) return false;
+    this.credits -= this.droneCost;
+    this.droneCooldown = this.droneMaxCooldown;
+    this.repairDroneDuration = 10000; // active for 10 seconds
+    sound.playPurchase();
+    return true;
+  }
+
+  buyUpgrade(type: 'HEALTH' | 'SHIELD' | 'DASH'): boolean {
+    if (this.isDead) return false;
+
+    if (type === 'HEALTH' && this.healthLvl < 4) {
+      const cost = 120 + this.healthLvl * 60;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.healthLvl++;
+        this.maxHealth = 100 + this.healthLvl * 25;
+        this.health = Math.min(this.maxHealth, this.health + 25);
+        sound.playPurchase();
+        return true;
+      }
+    } else if (type === 'SHIELD' && this.shieldLvl < 4) {
+      const cost = 100 + this.shieldLvl * 50;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.shieldLvl++;
+        this.maxShield = 50 + this.shieldLvl * 25;
+        this.shield = this.maxShield;
+        sound.playPurchase();
+        return true;
+      }
+    } else if (type === 'DASH' && this.dashLvl < 4) {
+      const cost = 150 + this.dashLvl * 75;
+      if (this.credits >= cost) {
+        this.credits -= cost;
+        this.dashLvl++;
+        this.dashMaxCooldown = Math.max(650, 1500 - this.dashLvl * 220); // 1500 -> 1280 -> 1060 -> 840 -> 650
+        sound.playPurchase();
+        return true;
+      }
+    }
+
+    return false;
   }
 }

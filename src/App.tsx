@@ -5,6 +5,7 @@ import { MainMenu } from './components/MainMenu';
 import type { GameEngine } from './game/Engine';
 import type { GameState, EngineStateUpdate, WeaponType } from './game/Types';
 import { sound } from './game/Sound';
+import { basesManager } from './game/Bases';
 import { Play, RotateCcw } from 'lucide-react';
 import './App.css';
 
@@ -53,6 +54,41 @@ function App() {
     setEngineState(null);
   };
 
+  const handleBuyUpgrade = (type: 'HEALTH' | 'SHIELD' | 'DASH') => {
+    if (engineRef.current) {
+      engineRef.current.player.buyUpgrade(type);
+    }
+  };
+
+  const handleBuildTurret = () => {
+    if (engineRef.current) {
+      const player = engineRef.current.player;
+      if (player.credits >= 200) {
+        // Find the nearest player-owned base without a turret
+        let bestBase: any = null;
+        let bestDist = Infinity;
+        basesManager.bases.forEach(b => {
+          if (b.faction === 'PLAYER' && !b.hasTurret) {
+            const dx = player.x - b.x;
+            const dy = player.y - b.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestBase = b;
+            }
+          }
+        });
+        if (bestBase) {
+          player.credits -= 200;
+          bestBase.hasTurret = true;
+          bestBase.turretCooldown = 0;
+          bestBase.turretAngle = 0;
+          sound.playPurchase();
+        }
+      }
+    }
+  };
+
   return (
     <div className="app-container">
       {/* Global CRT Screen Filter */}
@@ -79,6 +115,8 @@ function App() {
           onToggleCrt={() => setCrtEnabled(!crtEnabled)}
           onPause={() => engineRef.current?.togglePause()}
           onQuit={handleQuit}
+          onBuyUpgrade={handleBuyUpgrade}
+          onBuildTurret={handleBuildTurret}
         />
       )}
 

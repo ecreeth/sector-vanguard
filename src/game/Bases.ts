@@ -1,4 +1,5 @@
 import { sound } from './Sound';
+import { projectilesManager } from './Projectiles';
 
 
 export type FactionType = 'NEUTRAL' | 'PLAYER' | 'ENEMY';
@@ -12,6 +13,11 @@ export interface BaseConfig {
   faction: FactionType;
   progress: number; // 0 to 100
   capturingFaction: FactionType | null;
+  
+  // Expansion base defense
+  hasTurret?: boolean;
+  turretCooldown?: number;
+  turretAngle?: number;
 }
 
 export class BasesManager {
@@ -84,7 +90,7 @@ export class BasesManager {
     dt: number,
     playerX: number,
     playerY: number,
-    enemies: { x: number, y: number, isFriendly: boolean }[],
+    enemies: any[],
     onCreditsEarned: (amount: number) => void,
     onSpawnDefender: (x: number, y: number) => void
   ): { activeBase: BaseConfig | null } {
@@ -182,6 +188,52 @@ export class BasesManager {
           base.progress = Math.max(0, base.progress - (4 * dt) / 1000);
         }
       }
+
+      // Update Base Defense Turret logic
+      if (base.faction === 'PLAYER' && base.hasTurret) {
+        base.turretCooldown = (base.turretCooldown ?? 0) - dt;
+
+        // Scan for closest hostile target in range
+        let targetEnemy: any = null;
+        let minDist = 280;
+
+        enemies.forEach(e => {
+          if (!e.isFriendly && !e.isDead) {
+            const dx = e.x - base.x;
+            const dy = e.y - base.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < minDist) {
+              minDist = dist;
+              targetEnemy = e;
+            }
+          }
+        });
+
+        if (targetEnemy) {
+          base.turretAngle = Math.atan2(targetEnemy.y - base.y, targetEnemy.x - base.x);
+          if (base.turretCooldown <= 0) {
+            base.turretCooldown = 850; // fire rate interval
+
+            projectilesManager.spawnBullet(
+              base.x,
+              base.y,
+              base.turretAngle,
+              11.5,
+              12, // turret laser damage
+              true, // friendly
+              '#39ff14',
+              4.0
+            );
+            sound.playLaser();
+          }
+        } else {
+          base.turretAngle = (base.turretAngle ?? 0) + 0.015 * (dt / 16.66);
+        }
+      } else {
+        if (base.faction !== 'PLAYER') {
+          base.hasTurret = false;
+        }
+      }
     });
 
     // 2. Credits Income Generation (every 5 seconds)
@@ -218,6 +270,34 @@ export class BasesManager {
     this.bases.forEach(base => {
       const screenX = base.x - cameraX;
       const screenY = base.y - cameraY;
+
+      // Draw auto defense turret if constructed
+      if (base.faction === 'PLAYER' && base.hasTurret) {
+        const angle = base.turretAngle ?? 0;
+
+        // Base plate ring
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#00f2fe';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Gun barrel
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY);
+        ctx.lineTo(screenX + Math.cos(angle) * 23, screenY + Math.sin(angle) * 23);
+        ctx.stroke();
+
+        // Turret glowing head cap
+        ctx.fillStyle = '#00f2fe';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Color scheme according to faction
       let ringColor = 'rgba(100, 116, 139, 0.2)'; // Neutral grey

@@ -25,6 +25,7 @@ export class GameEngine {
   // Game Settings & State
   gameState: GameState = 'MENU';
   selectedBiome: string = 'FOREST';
+  bossSpawned: boolean = false;
   
   // Input Handling
   keys: Record<string, boolean> = {};
@@ -64,6 +65,17 @@ export class GameEngine {
     }
     if (e.key === 'escape' || e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
       this.togglePause();
+    }
+    if (e.key === '1') {
+      this.player?.triggerEMP();
+    }
+    if (e.key === '2') {
+      const worldX = this.mouseX + this.cameraX;
+      const worldY = this.mouseY + this.cameraY;
+      this.player?.triggerAirstrike(worldX, worldY);
+    }
+    if (e.key === '3') {
+      this.player?.triggerRepairDrone();
     }
   };
 
@@ -174,6 +186,7 @@ export class GameEngine {
     enemiesManager.reset();
 
     this.gameState = 'PLAYING';
+    this.bossSpawned = false;
     this.lastTime = performance.now();
     
     // Stop any running loop first
@@ -307,6 +320,9 @@ export class GameEngine {
     };
     enemiesManager.update(dt, this.map, playerTarget);
 
+    // Update map hazards, toxic pools, and blizzards
+    this.map.update(dt, playerTarget);
+
     // 6. Update Projectiles
     // Gather all valid hit targets (player and enemies)
     const targets = enemiesManager.enemies.map(e => ({
@@ -345,14 +361,26 @@ export class GameEngine {
       basesManager.getPositionsForFog()
     );
 
-    // 9. Check Game State Conditions (Victory vs Defeat)
+    // 9. Check Game State Conditions (Victory vs Defeat / Boss encounter)
     if (this.player.isDead) {
       this.gameState = 'GAMEOVER';
     } else {
-      // Victory if player captures all bases (total bases count = bases length)
       const playerBases = basesManager.bases.filter(b => b.faction === 'PLAYER').length;
+      
+      // Boss triggers when all 4 bases are captured
       if (playerBases === basesManager.bases.length) {
-        this.gameState = 'VICTORY';
+        if (!this.bossSpawned) {
+          this.bossSpawned = true;
+          // Spawn the Sector Overseer Boss Mech at map center (1280, 1280)
+          enemiesManager.spawnEnemy(1280, 1280, 'BOSS');
+          sound.playShieldRegen(); // alarm visual sound cue
+        } else {
+          // If boss is spawned, victory only when boss is destroyed
+          const bossDead = !enemiesManager.enemies.some(e => e.type === 'BOSS' && !e.isDead);
+          if (bossDead) {
+            this.gameState = 'VICTORY';
+          }
+        }
       }
     }
 
@@ -394,6 +422,24 @@ export class GameEngine {
 
     // 6. Draw visual boundary grid markers on visible tiles (grid lining detail)
     this.drawGridOverlay();
+
+    // 6.5 Draw Blizzard overlay on top of everything for maximum realism
+    if (this.map.blizzardActive) {
+      this.ctx.fillStyle = 'rgba(226, 241, 246, 0.15)';
+      this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
+
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+      this.ctx.lineWidth = 1.8;
+      this.ctx.beginPath();
+      for (let i = 0; i < 18; i++) {
+        const offsetVal = (i * 123 + Date.now() * 1.3) % (this.screenWidth + 200);
+        const sx = offsetVal - 100;
+        const sy = (i * 85 + Date.now() * 0.75) % this.screenHeight;
+        this.ctx.moveTo(sx, sy);
+        this.ctx.lineTo(sx - 45, sy + 30);
+      }
+      this.ctx.stroke();
+    }
 
     // 7. Draw Tactical Satellite Radar Minimap
     this.drawRadarMinimap();

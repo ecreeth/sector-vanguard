@@ -1,4 +1,7 @@
 import type { TileType } from './Types';
+import { enemiesManager } from './Enemies';
+import { projectilesManager } from './Projectiles';
+import { sound } from './Sound';
 
 export class GameMap {
   width: number;
@@ -7,9 +10,18 @@ export class GameMap {
   tiles: TileType[][] = [];
   visibility: number[][] = []; // 0 = fog, 1 = explored (grey), 2 = currently visible
 
+  // Expansion variables
+  biome: string = '';
+  barrels: Array<{ x: number, y: number, hp: number, isDead: boolean }> = [];
+  sludgePools: Array<{ x: number, y: number, radius: number }> = [];
+  blizzardActive: boolean = false;
+  blizzardTimer: number = 25000;
+  blizzardDuration: number = 0;
+
   constructor(biome: string) {
     this.width = 40; // 40 tiles wide
     this.height = 40; // 40 tiles high
+    this.biome = biome;
     this.generateMap(biome);
   }
 
@@ -52,6 +64,14 @@ export class GameMap {
           this.tiles[y][x] = 'WALL';
         }
       }
+    }
+
+    // 6. Generate cover explosive barrels
+    this.generateBarrels();
+
+    // 7. Generate initial toxic sludge zones for Wasteland
+    if (biome === 'WASTELAND') {
+      this.generateInitialSludge();
     }
   }
 
@@ -173,6 +193,128 @@ export class GameMap {
     }
   }
 
+  private generateBarrels() {
+    this.barrels = [];
+    const count = 16;
+    let placed = 0;
+
+    for (let attempts = 0; attempts < 500 && placed < count; attempts++) {
+      const tx = Math.floor(Math.random() * (this.width - 4)) + 2;
+      const ty = Math.floor(Math.random() * (this.height - 4)) + 2;
+
+      if (this.tiles[ty][tx] === 'GRASS' || this.tiles[ty][tx] === 'ROAD') {
+        let nearWall = false;
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dx, dy] of dirs) {
+          if (this.tiles[ty + dy][tx + dx] === 'WALL') {
+            nearWall = true;
+            break;
+          }
+        }
+
+        if (nearWall) {
+          const bases = [
+            { x: 32, y: 8 }, { x: 8, y: 32 }, { x: 20, y: 20 }, { x: 32, y: 32 }
+          ];
+          let nearStrategic = false;
+          for (const b of bases) {
+            const dx = tx - b.x;
+            const dy = ty - b.y;
+            if (dx*dx + dy*dy < 4*4) {
+              nearStrategic = true;
+              break;
+            }
+          }
+          if (Math.abs(tx - 3) < 4 && Math.abs(ty - 3) < 4) {
+            nearStrategic = true;
+          }
+
+          if (!nearStrategic) {
+            this.barrels.push({
+              x: tx * this.tileSize + this.tileSize / 2,
+              y: ty * this.tileSize + this.tileSize / 2,
+              hp: 25,
+              isDead: false
+            });
+            placed++;
+          }
+        }
+      }
+    }
+  }
+
+  private generateInitialSludge() {
+    this.sludgePools = [];
+    for (let i = 0; i < 8; i++) {
+      const sx = Math.random() * (this.width * this.tileSize);
+      const sy = Math.random() * (this.height * this.tileSize);
+
+      if (Math.abs(sx - 3*this.tileSize) < 180 && Math.abs(sy - 3*this.tileSize) < 180) continue;
+      this.sludgePools.push({
+        x: sx,
+        y: sy,
+        radius: 45 + Math.random() * 25
+      });
+    }
+  }
+
+  detonateBarrel(bx: number, by: number, player?: { x: number; y: number; takeDamage: (dmg: number) => void; isDead: boolean }) {
+    sound.playExplosion();
+    projectilesManager.spawnExplosionParticles(bx, by, 32);
+
+    this.sludgePools.push({
+      x: bx,
+      y: by,
+      radius: 45
+    });
+
+    enemiesManager.enemies.forEach(e => {
+      if (!e.isDead) {
+        const dx = e.x - bx;
+        const dy = e.y - by;
+        if (dx*dx + dy*dy < 110*110) {
+          e.takeDamage(60);
+        }
+      }
+    });
+
+    if (player && !player.isDead) {
+      const dx = player.x - bx;
+      const dy = player.y - by;
+      if (dx*dx + dy*dy < 110*110) {
+        player.takeDamage(50);
+      }
+    }
+  }
+
+  update(dt: number, player: { x: number; y: number; takeDamage: (dmg: number) => void; isDead: boolean }) {
+    if (this.biome === 'TUNDRA') {
+      if (this.blizzardActive) {
+        this.blizzardDuration -= dt;
+        if (this.blizzardDuration <= 0) {
+          this.blizzardActive = false;
+          this.blizzardTimer = 35000 + Math.random() * 15000;
+        }
+      } else {
+        this.blizzardTimer -= dt;
+        if (this.blizzardTimer <= 0) {
+          this.blizzardActive = true;
+          this.blizzardDuration = 10000;
+        }
+      }
+    }
+
+    if (this.biome === 'WASTELAND' && !player.isDead) {
+      this.sludgePools.forEach(s => {
+        const dx = player.x - s.x;
+        const dy = player.y - s.y;
+        if (dx*dx + dy*dy < s.radius * s.radius) {
+          player.takeDamage((8 * dt) / 1000);
+        }
+      });
+    }
+  }
+
   inBounds(x: number, y: number): boolean {
     return x >= 0 && x < this.width && y >= 0 && y < this.height;
   }
@@ -233,7 +375,7 @@ export class GameMap {
     // 2. Set tiles near player to visible (2)
     const playerTileX = Math.floor(playerX / this.tileSize);
     const playerTileY = Math.floor(playerY / this.tileSize);
-    const visionRadius = 7; // tiles
+    const visionRadius = this.blizzardActive ? 3.5 : 7; // tiles
 
     for (let dy = -visionRadius; dy <= visionRadius; dy++) {
       for (let dx = -visionRadius; dx <= visionRadius; dx++) {
@@ -433,6 +575,89 @@ export class GameMap {
           ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
         }
       }
+    }
+
+    // Draw Sludge Pools
+    this.sludgePools.forEach(s => {
+      const screenX = s.x - cameraX;
+      const screenY = s.y - cameraY;
+
+      if (screenX + s.radius > 0 && screenX - s.radius < screenWidth &&
+          screenY + s.radius > 0 && screenY - s.radius < screenHeight) {
+        
+        ctx.fillStyle = 'rgba(57, 255, 20, 0.16)';
+        ctx.strokeStyle = 'rgba(57, 255, 20, 0.32)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw small rising green bubbles
+        ctx.fillStyle = 'rgba(57, 255, 20, 0.22)';
+        for (let i = 0; i < 3; i++) {
+          const bubbleX = screenX + Math.sin(Date.now() / 250 + i * 1.5) * (s.radius * 0.45);
+          const bubbleY = screenY + Math.cos(Date.now() / 320 + i * 3) * (s.radius * 0.45);
+          ctx.beginPath();
+          ctx.arc(bubbleX, bubbleY, 3 + (Date.now() / 450 + i * 2) % 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+
+    // Draw Cover Explosive Barrels
+    this.barrels.forEach(b => {
+      if (b.isDead) return;
+      const screenX = b.x - cameraX;
+      const screenY = b.y - cameraY;
+
+      if (screenX + 20 > 0 && screenX - 20 < screenWidth &&
+          screenY + 20 > 0 && screenY - 20 < screenHeight) {
+        
+        // Red canister body
+        ctx.fillStyle = '#ef4444';
+        ctx.strokeStyle = '#7f1d1d';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Cap lid
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warning Hazard Strip
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 12, -0.4, 0.4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 12, Math.PI - 0.4, Math.PI + 0.4);
+        ctx.stroke();
+      }
+    });
+
+    // Blizzard Snow Particle Blusters Overlay (Tundra Biome Blizzard Active)
+    if (this.blizzardActive) {
+      ctx.fillStyle = 'rgba(226, 241, 246, 0.13)';
+      ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+      // Draw fast swirling diagonal snow streaks
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let i = 0; i < 18; i++) {
+        const offsetVal = (i * 123 + Date.now() * 1.3) % (screenWidth + 200);
+        const sx = offsetVal - 100;
+        const sy = (i * 85 + Date.now() * 0.7) % screenHeight;
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - 45, sy + 30);
+      }
+      ctx.stroke();
     }
   }
 }

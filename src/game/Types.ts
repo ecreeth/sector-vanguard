@@ -26,6 +26,24 @@ export interface GameMapConfig {
   spawnY: number; // player spawn Y in tile coords
 }
 
+export interface SkillStats {
+  empCooldown: number; // 0 to 1 percentage remaining
+  airstrikeCooldown: number;
+  droneCooldown: number;
+  empCost: number;
+  airstrikeCost: number;
+  droneCost: number;
+}
+
+export interface UpgradeStats {
+  healthLvl: number;
+  shieldLvl: number;
+  dashLvl: number;
+  healthCost: number;
+  shieldCost: number;
+  dashCost: number;
+}
+
 export interface PlayerStats {
   health: number;
   maxHealth: number;
@@ -40,6 +58,13 @@ export interface PlayerStats {
   capturedBasesCount: number;
   totalBasesCount: number;
   isDead: boolean;
+  
+  // Expansion additions
+  skills: SkillStats;
+  upgrades: UpgradeStats;
+  bossActive: boolean;
+  bossHp: number;
+  bossMaxHp: number;
 }
 
 export interface EngineStateUpdate {
