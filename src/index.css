@@ -149,6 +149,22 @@ body, html {
   border-radius: 4px;
 }
 
+/* Active HUD panels transparency & hover effects during gameplay */
+.hud-root .hud-panel {
+  opacity: 0.38;
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.hud-root .hud-panel:hover {
+  opacity: 1.0;
+  background: rgba(12, 14, 24, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+}
+
 /* Sci-fi buttons */
 .sci-fi-button {
   background: rgba(0, 242, 254, 0.05);

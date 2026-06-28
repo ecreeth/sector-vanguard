@@ -17,6 +17,7 @@ interface HUDProps {
   soundEnabled: boolean;
   crtEnabled: boolean;
   onToggleCrt: () => void;
+  onPause: () => void;
   onQuit: () => void;
 }
 
@@ -28,6 +29,7 @@ export const HUD: React.FC<HUDProps> = ({
   soundEnabled,
   crtEnabled,
   onToggleCrt,
+  onPause,
   onQuit
 }) => {
   const { health, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons } = stats;
@@ -89,6 +91,9 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Global Controls */}
         <div style={hudStyles.globalButtons}>
+          <button onClick={onPause} style={hudStyles.controlBtn} title="Pause Mission [ESC] / [P]">
+            PAUSE
+          </button>
           <button onClick={onToggleCrt} style={hudStyles.controlBtn} title="Toggle CRT Screen Scanlines">
             CRT: {crtEnabled ? 'ON' : 'OFF'}
           </button>

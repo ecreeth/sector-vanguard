@@ -3,13 +3,13 @@ import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
 import { MainMenu } from './components/MainMenu';
 import type { GameEngine } from './game/Engine';
-import type { EngineStateUpdate, WeaponType } from './game/Types';
+import type { GameState, EngineStateUpdate, WeaponType } from './game/Types';
 import { sound } from './game/Sound';
 import { Play, RotateCcw } from 'lucide-react';
 import './App.css';
 
 function App() {
-  const [gameState, setGameState] = useState<'MENU' | 'PLAYING' | 'GAMEOVER' | 'VICTORY'>('MENU');
+  const [gameState, setGameState] = useState<GameState>('MENU');
   const [selectedBiome, setSelectedBiome] = useState<string>('FOREST');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [crtEnabled, setCrtEnabled] = useState<boolean>(true);
@@ -77,6 +77,7 @@ function App() {
           soundEnabled={soundEnabled}
           crtEnabled={crtEnabled}
           onToggleCrt={() => setCrtEnabled(!crtEnabled)}
+          onPause={() => engineRef.current?.togglePause()}
           onQuit={handleQuit}
         />
       )}
@@ -90,6 +91,45 @@ function App() {
           crtEnabled={crtEnabled}
           onToggleCrt={() => setCrtEnabled(!crtEnabled)}
         />
+      )}
+
+      {/* Pause Screen Overlay */}
+      {gameState === 'PAUSED' && (
+        <div className="game-overlay fade-in">
+          <div className="overlay-card hud-panel" style={{ width: '380px' }}>
+            <h2 className="overlay-title" style={{ color: 'var(--neon-cyan)', textShadow: '0 0 10px var(--neon-cyan-glow)' }}>
+              MISSION PAUSED
+            </h2>
+            <div className="overlay-subtitle">TACTICAL COMMS SUSPENDED</div>
+            <p className="overlay-desc">
+              Press [ESC] / [P] to resume active duty, or select an option below.
+            </p>
+            <div className="overlay-buttons" style={{ flexDirection: 'column', width: '100%', gap: '10px' }}>
+              <button 
+                onClick={() => engineRef.current?.togglePause()} 
+                className="sci-fi-button success"
+                style={{ width: '100%', letterSpacing: '1px' }}
+              >
+                RESUME OPERATIONS
+              </button>
+              <button 
+                onClick={() => {
+                  if (engineRef.current) {
+                    engineRef.current.start(selectedBiome);
+                  }
+                  setGameState('PLAYING');
+                }} 
+                className="sci-fi-button"
+                style={{ width: '100%', borderColor: 'var(--neon-yellow)', color: 'var(--neon-yellow)', letterSpacing: '1px' }}
+              >
+                RESTART SECTOR
+              </button>
+              <button onClick={handleQuit} className="sci-fi-button danger" style={{ width: '100%', letterSpacing: '1px' }}>
+                ABANDON MISSION
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 4. Game Over Screen Overlay */}

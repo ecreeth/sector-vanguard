@@ -62,6 +62,9 @@ export class GameEngine {
     if (e.key === 'q' || e.key === 'Q') {
       this.player?.cycleWeapon();
     }
+    if (e.key === 'escape' || e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      this.togglePause();
+    }
   };
 
   private handleKeyUp = (e: KeyboardEvent) => {
@@ -110,6 +113,45 @@ export class GameEngine {
     window.removeEventListener('mousedown', this.handleMouseDown);
     window.removeEventListener('mouseup', this.handleMouseUp);
     window.removeEventListener('blur', this.handleBlur);
+  }
+
+  togglePause() {
+    if (this.gameState === 'PLAYING') {
+      this.gameState = 'PAUSED';
+      this.mouseClicked = false;
+      this.keys = {}; // clear active keys on pause
+    } else if (this.gameState === 'PAUSED') {
+      this.gameState = 'PLAYING';
+      this.lastTime = performance.now();
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+      }
+      this.animationFrameId = requestAnimationFrame((t) => this.loop(t));
+    }
+
+    // Trigger state sync back to React HUD
+    // Check if player is near a base
+    const activeBase = basesManager.bases.find(b => {
+      const dx = this.player.x - b.x;
+      const dy = this.player.y - b.y;
+      return dx*dx + dy*dy < b.radius * b.radius;
+    });
+
+    const activeCapture = activeBase ? {
+      name: activeBase.name,
+      progress: activeBase.progress,
+      faction: activeBase.faction
+    } : null;
+
+    this.onStateUpdate({
+      stats: this.player.getStats(
+        basesManager.bases.filter(b => b.faction === 'PLAYER').length,
+        basesManager.bases.length
+      ),
+      gameState: this.gameState,
+      selectedBiome: this.selectedBiome,
+      activeCaptureProgress: activeCapture
+    });
   }
 
   // Starts the playing phase

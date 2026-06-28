@@ -1,6 +1,7 @@
-import { GameMap } from './Map';
+import type { GameMap } from './Map';
 import { projectilesManager } from './Projectiles';
 import { sound } from './Sound';
+import { basesManager } from './Bases';
 
 export type EnemyType = 'DRONE' | 'TURRET' | 'MECH' | 'DEFENDER';
 
@@ -155,7 +156,7 @@ export class Enemy {
       }
     }
 
-    // 3. Movement Behavior (Steering + Obstacle Avoidance)
+    // 3. Movement Behavior (Steering + Obstacle Avoidance + Bullet Dodging)
     if (this.speed > 0) {
       let steerX = 0;
       let steerY = 0;
@@ -170,17 +171,135 @@ export class Enemy {
           steerY = dy / dist;
         }
       } else {
-        // Patrol behavior: wander around original coordinate in circles
-        this.patrolAngle += 0.015 * (dt / 16.66);
-        const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
-        const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+        // Check if hostile unit should assault a player-secured or neutral outpost base
+        let assaultBase: { x: number, y: number, radius: number } | null = null;
 
-        const dx = targetPatrolX - this.x;
-        const dy = targetPatrolY - this.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist > 10) {
-          steerX = dx / dist;
-          steerY = dy / dist;
+        if (!this.isFriendly && this.type !== 'TURRET') {
+          let minBaseDist = Infinity;
+          basesManager.bases.forEach(b => {
+            if (b.faction !== 'ENEMY') { // target PLAYER and NEUTRAL bases
+              const dx = b.x - this.x;
+              const dy = b.y - this.y;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              if (dist < minBaseDist) {
+                minBaseDist = dist;
+                assaultBase = b;
+              }
+            }
+          });
+        }
+
+        if (assaultBase) {
+          // Assault Base pathing
+          const base: { x: number, y: number, radius: number } = assaultBase;
+          const dx = base.x - this.x;
+          const dy = base.y - this.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+
+          if (dist > base.radius - 30) {
+            // Outside base capture ring: steer directly to the flag
+            steerX = dx / dist;
+            steerY = dy / dist;
+          } else {
+            // Inside base: patrol/stand inside the flag area to capture
+            this.patrolAngle += 0.01 * (dt / 16.66);
+            const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
+            const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
+
+            const tdx = targetX - this.x;
+            const tdy = targetY - this.y;
+            const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
+            if (tDist > 8) {
+              steerX = tdx / tDist;
+              steerY = tdy / tDist;
+            }
+          }
+        } else {
+          // Standard patrol behavior: wander around original coordinate in circles
+          this.patrolAngle += 0.015 * (dt / 16.66);
+          const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
+          const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+
+          const dx = targetPatrolX - this.x;
+          const dy = targetPatrolY - this.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist > 10) {
+            steerX = dx / dist;
+            steerY = dy / dist;
+          }
+        }
+      }
+
+      // Dynamic Bullet/Projectile Dodging steering force
+      let dodgeSteerX = 0;
+      let dodgeSteerY = 0;
+      let threatsCount = 0;
+
+      projectilesManager.projectiles.forEach(p => {
+        // Only dodge opponent's bullets (hostiles dodge player, friendlies dodge enemy)
+        if (p.isPlayer !== this.isFriendly) {
+          const dx = this.x - p.x;
+          const dy = this.y - p.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+
+          // Only scan close-range bullets (within 150px)
+          if (dist < 150) {
+            const bulletSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+            if (bulletSpeed > 0) {
+              const pvx = p.vx / bulletSpeed;
+              const pvy = p.vy / bulletSpeed;
+
+              // Dot product determines if bullet is moving towards this unit
+              const dot = dx * pvx + dy * pvy;
+              if (dot > 0 && dot < dist + 15) {
+                // Projected point along bullet path nearest to unit center
+                const projX = p.x + pvx * dot;
+                const projY = p.y + pvy * dot;
+
+                // Perpendicular distance from unit center to bullet trajectory
+                const perpDist = Math.sqrt((this.x - projX) ** 2 + (this.y - projY) ** 2);
+                const safetyMargin = this.radius + 28; // bullet size + radius + buffer padding
+
+                if (perpDist < safetyMargin) {
+                  // Dodge perpendicular to bullet speed direction
+                  const rx = this.x - projX;
+                  const ry = this.y - projY;
+                  const rDist = Math.sqrt(rx*rx + ry*ry);
+
+                  let pushX = 0;
+                  let pushY = 0;
+
+                  if (rDist > 0.1) {
+                    pushX = rx / rDist;
+                    pushY = ry / rDist;
+                  } else {
+                    // Bullet is directly on a collision path, push perpendicular
+                    pushX = -pvy;
+                    pushY = pvx;
+                  }
+
+                  // Force gets stronger as bullet path gets closer to unit center
+                  const forceWeight = (safetyMargin - perpDist) / safetyMargin;
+                  dodgeSteerX += pushX * forceWeight * 1.5;
+                  dodgeSteerY += pushY * forceWeight * 1.5;
+                  threatsCount++;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Integrate dodging forces into pathing vectors
+      if (threatsCount > 0) {
+        steerX += dodgeSteerX;
+        steerY += dodgeSteerY;
+
+        // Re-normalize steer vector
+        const steerLen = Math.sqrt(steerX*steerX + steerY*steerY);
+        if (steerLen > 0) {
+          steerX /= steerLen;
+          steerY /= steerLen;
         }
       }
 

@@ -137,7 +137,34 @@ export class GameMap {
         const ty = startY + (isHorizontal ? 0 : l);
         
         if (this.inBounds(tx, ty)) {
-          // Avoid overwriting roads or bases (let's keep roads clear)
+          // Check proximity to bases to avoid spawning walls inside capture zones
+          const bases = [
+            { x: 32, y: 8 },   // Base Alpha
+            { x: 8, y: 32 },   // Base Beta
+            { x: 20, y: 20 },  // Base Gamma
+            { x: 32, y: 32 }   // Base Delta
+          ];
+
+          let nearBase = false;
+          for (const b of bases) {
+            const dx = tx - b.x;
+            const dy = ty - b.y;
+            if (dx*dx + dy*dy < 4*4) { // 4 tiles radius clearance
+              nearBase = true;
+              break;
+            }
+          }
+
+          // Check proximity to player spawn (3, 3)
+          const dxSpawn = tx - 3;
+          const dySpawn = ty - 3;
+          if (dxSpawn*dxSpawn + dySpawn*dySpawn < 3*3) {
+            nearBase = true;
+          }
+
+          if (nearBase) continue; // skip wall placement near strategic positions
+
+          // Avoid overwriting roads or water (let's keep roads clear)
           if (this.tiles[ty][tx] !== 'ROAD' && this.tiles[ty][tx] !== 'WATER') {
             this.tiles[ty][tx] = 'WALL';
           }

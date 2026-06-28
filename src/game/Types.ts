@@ -1,6 +1,6 @@
 // Shared types for Sector Vanguard
 
-export type GameState = 'MENU' | 'PLAYING' | 'GAMEOVER' | 'VICTORY';
+export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY';
 
 export type WeaponType = 'PISTOL' | 'SHOTGUN' | 'PLASMA_RIFLE';
 
