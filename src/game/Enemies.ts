@@ -89,8 +89,8 @@ export class Enemy {
         this.hp = 80;
         this.maxHp = 80;
         this.speed = 0; // stationary
-        this.shootDelay = 350; // rapid fire
-        this.damage = 5;
+        this.shootDelay = 900; // balanced from 350ms rapid fire
+        this.damage = 7;
         this.visionRange = 400;
         break;
       case 'MECH':
