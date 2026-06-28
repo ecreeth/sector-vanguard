@@ -42,7 +42,7 @@ export const HUD: React.FC<HUDProps> = ({
   selectedBiome,
   onDevAction
 }) => {
-  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades, godMode, squadOrder } = stats;
+  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades, godMode, squadOrder, activeDefendersCount } = stats;
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -327,11 +327,13 @@ export const HUD: React.FC<HUDProps> = ({
             { order: 'ESCORT' as const, label: '🟢 ESCORT', color: '#39ff14' },
             { order: 'SEARCH_AND_DESTROY' as const, label: '🔥 ASSAULT', color: '#f97316' }
           ]).map(cmd => {
-            const isActive = squadOrder === cmd.order;
+            const hasDefenders = (activeDefendersCount ?? 0) > 0;
+            const isActive = hasDefenders && squadOrder === cmd.order;
             return (
               <button
                 key={cmd.order}
                 onClick={() => onSetSquadOrder(cmd.order)}
+                disabled={!hasDefenders}
                 style={{
                   background: isActive ? `${cmd.color}15` : 'transparent',
                   border: `1px solid ${isActive ? cmd.color : 'rgba(255, 255, 255, 0.15)'}`,
@@ -340,10 +342,11 @@ export const HUD: React.FC<HUDProps> = ({
                   fontWeight: 'bold',
                   padding: '3px 8px',
                   borderRadius: '2px',
-                  cursor: 'pointer',
+                  cursor: hasDefenders ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s',
                   boxShadow: isActive ? `0 0 6px ${cmd.color}40` : 'none',
-                  textShadow: isActive ? `0 0 4px #ffffff` : 'none'
+                  textShadow: isActive ? `0 0 4px #ffffff` : 'none',
+                  opacity: hasDefenders ? 1 : 0.35
                 }}
               >
                 {cmd.label}

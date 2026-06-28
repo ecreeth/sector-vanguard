@@ -105,6 +105,9 @@ function App() {
 
   const handleSetSquadOrder = (order: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY') => {
     if (engineRef.current) {
+      const activeDefenders = enemiesManager.enemies.some(e => e.isFriendly && e.type === 'DEFENDER' && !e.isDead);
+      if (!activeDefenders) return;
+
       enemiesManager.squadOrder = order;
       sound.playOrderChange();
       let color = '#00f2fe';

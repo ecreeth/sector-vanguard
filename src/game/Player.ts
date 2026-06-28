@@ -383,7 +383,8 @@ export class Player {
       bossHp: boss ? Math.ceil(boss.hp) : 0,
       bossMaxHp: boss ? boss.maxHp : 0,
       godMode: this.godMode,
-      squadOrder: enemiesManager.squadOrder
+      squadOrder: enemiesManager.squadOrder,
+      activeDefendersCount: enemiesManager.enemies.filter(e => e.isFriendly && e.type === 'DEFENDER' && !e.isDead).length
     };
   }
 

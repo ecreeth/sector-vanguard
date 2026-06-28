@@ -477,7 +477,7 @@ export class GameMap {
     }
   }
 
-  updateVisibility(playerX: number, playerY: number, basePositions: {x: number, y: number, isPlayerFaction: boolean}[]) {
+  updateVisibility(playerX: number, playerY: number, basePositions: {x: number, y: number, isPlayerFaction: boolean, hasRadar?: boolean}[]) {
     if (this.biome === 'DEV_SANDBOX') {
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {

@@ -75,6 +75,7 @@ export interface PlayerStats {
   bossMaxHp: number;
   godMode: boolean;
   squadOrder?: SquadOrder;
+  activeDefendersCount?: number;
 }
 
 export type DefenseType = 'NONE' | 'TURRET' | 'SHIELD' | 'RADAR';
