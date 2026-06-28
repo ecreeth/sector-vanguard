@@ -257,4 +257,37 @@ describe('Enemy Types and AI Behaviors', () => {
     const dist = Math.sqrt(dx * dx + dy * dy);
     expect(dist).toBeGreaterThan(1);
   });
+
+  it('should target and fire back at player outside normal vision range when taking damage (alerted state)', () => {
+    const drone = new Enemy(100, 100, 'DRONE', false); // visionRange is 300
+    const player = { x: 500, y: 100, radius: 16, takeDamage: () => {}, isDead: false };
+    const map = new GameMap('FOREST');
+
+    // 1. Initial state: player is 400px away (beyond 300px vision), no target acquired
+    drone.update(16, map, player, []);
+    expect(drone.targetUnit).toBeNull();
+
+    // 2. Take damage: sets alertedTimer and targets the player
+    drone.takeDamage(10);
+    expect(drone.alertedTimer).toBeGreaterThan(0);
+
+    drone.update(16, map, player, []);
+    expect(drone.targetUnit).toBe(player);
+  });
+
+  it('should propagate alerts to nearby hostiles within a 250px radius', () => {
+    const mainEnemy = new Enemy(100, 100, 'DRONE', false);
+    const nearbyEnemy = new Enemy(120, 100, 'DRONE', false); // 20px away
+    const farEnemy = new Enemy(400, 100, 'DRONE', false); // 300px away
+
+    enemiesManager.enemies = [mainEnemy, nearbyEnemy, farEnemy];
+
+    // Trigger hit on mainEnemy
+    mainEnemy.takeDamage(5);
+
+    // Nearby enemy should be alerted, far enemy should not
+    expect(mainEnemy.alertedTimer).toBeGreaterThan(0);
+    expect(nearbyEnemy.alertedTimer).toBeGreaterThan(0);
+    expect(farEnemy.alertedTimer).toBe(0);
+  });
 });

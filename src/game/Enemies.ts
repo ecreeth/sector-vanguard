@@ -46,6 +46,7 @@ export class Enemy {
   plasmaBurnLvl: number = 0;
   plasmaBurnTicks: number = 0;
   plasmaBurnTimer: number = 0;
+  alertedTimer: number = 0;
 
   applyPlasmaBurn(level: number) {
     if (this.isDead) return;
@@ -190,6 +191,20 @@ export class Enemy {
 
     this.hp = Math.max(0, this.hp - amount);
     sound.playHit();
+
+    if (!this.isFriendly) {
+      this.alertedTimer = 5000;
+      // Alert nearby hostiles
+      enemiesManager.enemies.forEach(e => {
+        if (!e.isFriendly && !e.isDead && e !== this) {
+          const dx = e.x - this.x;
+          const dy = e.y - this.y;
+          if (dx*dx + dy*dy < 250 * 250) {
+            e.alertedTimer = 5000;
+          }
+        }
+      });
+    }
 
     // Trigger Boss Drone waves
     if (this.type === 'BOSS' && !this.isDead) {
@@ -340,6 +355,10 @@ export class Enemy {
       this.shootCooldown = Math.max(0, this.shootCooldown - dt);
     }
 
+    if (this.alertedTimer > 0) {
+      this.alertedTimer = Math.max(0, this.alertedTimer - dt);
+    }
+
     // 2. Select AI Target
     this.targetUnit = null;
 
@@ -398,14 +417,14 @@ export class Enemy {
 
           if (closestDefender) {
             this.targetUnit = closestDefender;
-          } else if (distToPlayer < this.visionRange && !player.isDead) {
+          } else if ((distToPlayer < this.visionRange || (this.alertedTimer > 0 && distToPlayer < this.visionRange * 2)) && !player.isDead) {
             this.targetUnit = player;
           }
         }
       } else {
         // Roaming hostile units: standard target selection
         let closestDefender: Enemy | null = null;
-        let minDist = distToPlayer < this.visionRange ? distToPlayer : this.visionRange;
+        let minDist = (distToPlayer < this.visionRange || (this.alertedTimer > 0 && distToPlayer < this.visionRange * 2)) ? distToPlayer : this.visionRange;
 
         otherEnemies.forEach(e => {
           if (e.isFriendly && !e.isDead) {
@@ -421,7 +440,7 @@ export class Enemy {
 
         if (closestDefender) {
           this.targetUnit = closestDefender;
-        } else if (distToPlayer < this.visionRange && !player.isDead) {
+        } else if ((distToPlayer < this.visionRange || (this.alertedTimer > 0 && distToPlayer < this.visionRange * 2)) && !player.isDead) {
           this.targetUnit = player;
         }
       }
@@ -799,7 +818,7 @@ export class Enemy {
           }
         }
 
-        if (hasLOS && dist < this.visionRange) {
+        if (hasLOS && (dist < this.visionRange || (this.alertedTimer > 0 && dist < this.visionRange * 2))) {
           const angle = Math.atan2(dy, dx);
           this.shoot(angle);
           this.shootCooldown = this.shootDelay;

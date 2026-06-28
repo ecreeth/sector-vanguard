@@ -35,7 +35,7 @@
 ### 5. Advanced Enemy Types
 - **Shield Mech**: Frontal protection plate blocks 100% of damage incoming from its front arc, spawning deflection sparks and "BLOCKED" combat indicators. Flank them or deploy decoy units to expose their vulnerable rear chassis.
 - **Portal Rifts**: Stationary portals spawning aggressive Drone and Suicide Drone patrol squads every 5 seconds.
-- **Guard Leash AI**: Outpost defense mechs are tethered to their home coordinates within a **240px** radius. They will drop target lock and return to defend their flag if you retreat beyond their leash limit, preventing them from leaving outposts vulnerable. Dynamic border infiltration squads are not leashed and roam the map to actively recapture outposts.
+- **Guard Leash AI**: Outpost defense mechs are tethered to their home coordinates within a **240px** radius. They will drop target lock and return to defend their flag if you retreat beyond their leash limit, preventing them from leaving outposts vulnerable. Dynamic border infiltration squads are not leashed and roam the map to actively recapture outposts. Taking damage from the player immediately alerts them and nearby units (within 250px), enabling them to target and shoot back up to double their normal vision range.
 
 ---
 
@@ -108,4 +108,4 @@ npm run build
 # Execute the Vitest unit/integration test suite
 npm test
 ```
-The test suite consists of **60 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, biome hazards, wall-bound ricochet bounces, pierce penetrations, Shield Mech frontal block angle sectors, spawning portals, plasma burn DoTs, and Guard leash AI constraints.
+The test suite consists of **63 automated tests** checking Player upgrades, Boss HP thresholds, project collision, bases capture rates, biome hazards, wall-bound ricochet bounces, pierce penetrations, Shield Mech frontal block angle sectors, spawning portals, plasma burn DoTs, Guard leash AI constraints, combat alerts, and unit separation steering.
