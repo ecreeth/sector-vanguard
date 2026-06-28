@@ -658,6 +658,49 @@ export class Enemy {
         }
       }
 
+      // Unit separation steering — prevent units from stacking on top of each other
+      let sepX = 0;
+      let sepY = 0;
+      const separationRadius = this.radius * 3;
+
+      otherEnemies.forEach(e => {
+        if (e === this || e.isDead) return;
+        const dx = this.x - e.x;
+        const dy = this.y - e.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = this.radius + e.radius + 4;
+
+        if (dist < separationRadius && dist > 0.1) {
+          // Stronger push the closer they are, especially when overlapping
+          const overlap = dist < minDist;
+          const force = overlap ? 2.0 : (separationRadius - dist) / separationRadius * 0.6;
+          sepX += (dx / dist) * force;
+          sepY += (dy / dist) * force;
+        }
+      });
+
+      // Also separate from player
+      {
+        const dx = this.x - player.x;
+        const dy = this.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = this.radius + player.radius + 4;
+        if (dist < minDist && dist > 0.1) {
+          sepX += (dx / dist) * 2.0;
+          sepY += (dy / dist) * 2.0;
+        }
+      }
+
+      if (sepX !== 0 || sepY !== 0) {
+        steerX += sepX;
+        steerY += sepY;
+        const steerLen = Math.sqrt(steerX * steerX + steerY * steerY);
+        if (steerLen > 0) {
+          steerX /= steerLen;
+          steerY /= steerLen;
+        }
+      }
+
       // Obstacle avoidance steering
       // Cast a "ray" forward to detect walls
       const checkDist = 32;

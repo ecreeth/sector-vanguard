@@ -237,4 +237,24 @@ describe('Enemy Types and AI Behaviors', () => {
     expect(intruder.vx).toBeGreaterThan(0);
     expect(intruder.vy).toBeGreaterThan(0);
   });
+
+  it('should push overlapping units apart via separation steering', () => {
+    // Place two defenders directly on top of each other
+    const def1 = new Enemy(200, 200, 'DEFENDER', true);
+    const def2 = new Enemy(200, 200, 'DEFENDER', true);
+    const player = { x: 500, y: 500, radius: 16, takeDamage: () => {}, isDead: false };
+    const map = new GameMap('FOREST');
+
+    // Run several updates so separation forces kick in
+    for (let i = 0; i < 10; i++) {
+      def1.update(16, map, player, [def1, def2]);
+      def2.update(16, map, player, [def1, def2]);
+    }
+
+    // They should no longer be at the exact same position
+    const dx = def1.x - def2.x;
+    const dy = def1.y - def2.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    expect(dist).toBeGreaterThan(1);
+  });
 });
