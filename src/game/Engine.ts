@@ -352,6 +352,9 @@ export class GameEngine {
 
     // 6. Draw visual boundary grid markers on visible tiles (grid lining detail)
     this.drawGridOverlay();
+
+    // 7. Draw Tactical Satellite Radar Minimap
+    this.drawRadarMinimap();
   }
 
   // Subtle grid overlays matching Athena Crisis grid styling
@@ -374,5 +377,163 @@ export class GameEngine {
         }
       }
     }
+  }
+
+  // Circular Sci-Fi Radar Minimap showing bases, player aim, and visible enemies
+  private drawRadarMinimap() {
+    const r = 55; // radius
+    const cx = this.screenWidth - 85;
+    const cy = 135;
+
+    this.ctx.save();
+    
+    // Create circular clipping path for minimap layout content
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    this.ctx.clip();
+
+    // Background fill
+    this.ctx.fillStyle = 'rgba(12, 14, 24, 0.85)';
+    this.ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    // Scale map to fit in radar (leaving 5px borders)
+    const tileSizeMinimap = (r * 2 - 10) / this.map.width;
+    const startX = cx - (this.map.width * tileSizeMinimap) / 2;
+    const startY = cy - (this.map.height * tileSizeMinimap) / 2;
+
+    // 1. Draw Explored Map Grid
+    for (let ty = 0; ty < this.map.height; ty++) {
+      for (let tx = 0; tx < this.map.width; tx++) {
+        const vis = this.map.visibility[ty][tx];
+        if (vis > 0) {
+          const tile = this.map.tiles[ty][tx];
+          const tileX = startX + tx * tileSizeMinimap;
+          const tileY = startY + ty * tileSizeMinimap;
+
+          if (tile === 'WALL') {
+            this.ctx.fillStyle = vis === 2 ? '#4b5563' : '#1f2937';
+          } else if (tile === 'WATER') {
+            this.ctx.fillStyle = vis === 2 ? '#0f326b' : '#051838';
+          } else if (tile === 'ROAD') {
+            this.ctx.fillStyle = vis === 2 ? '#2d2e38' : '#14151b';
+          } else {
+            this.ctx.fillStyle = vis === 2 ? '#182c18' : '#0a140a';
+          }
+          this.ctx.fillRect(tileX, tileY, tileSizeMinimap, tileSizeMinimap);
+        }
+      }
+    }
+
+    // 2. Draw Capture Bases
+    basesManager.bases.forEach(base => {
+      const tx = Math.floor(base.x / this.map.tileSize);
+      const ty = Math.floor(base.y / this.map.tileSize);
+
+      if (this.map.visibility[ty][tx] > 0) {
+        const bx = startX + tx * tileSizeMinimap + tileSizeMinimap / 2;
+        const by = startY + ty * tileSizeMinimap + tileSizeMinimap / 2;
+
+        let baseColor = '#64748b'; // neutral grey
+        if (base.faction === 'PLAYER') baseColor = '#00f2fe';
+        else if (base.faction === 'ENEMY') baseColor = '#ff0055';
+
+        this.ctx.fillStyle = baseColor;
+        this.ctx.beginPath();
+        this.ctx.arc(bx, by, 3.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Contested flash ring
+        if (base.progress > 0 && base.progress < 100) {
+          this.ctx.strokeStyle = base.capturingFaction === 'PLAYER' ? '#00f2fe' : '#ff0055';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.arc(bx, by, 5.5 + Math.sin(Date.now() / 150) * 1.5, 0, Math.PI * 2);
+          this.ctx.stroke();
+        }
+      }
+    });
+
+    // 3. Draw Active Enemies (only if visible under fog of war level 2)
+    enemiesManager.enemies.forEach(e => {
+      const tx = Math.floor(e.x / this.map.tileSize);
+      const ty = Math.floor(e.y / this.map.tileSize);
+
+      if (this.map.visibility[ty][tx] === 2 && !e.isDead) {
+        const ex = startX + tx * tileSizeMinimap + tileSizeMinimap / 2;
+        const ey = startY + ty * tileSizeMinimap + tileSizeMinimap / 2;
+
+        this.ctx.fillStyle = e.isFriendly ? '#39ff14' : '#ff0055';
+        this.ctx.beginPath();
+        this.ctx.arc(ex, ey, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    });
+
+    // 4. Draw Player Beacon
+    const pTx = Math.floor(this.player.x / this.map.tileSize);
+    const pTy = Math.floor(this.player.y / this.map.tileSize);
+    const px = startX + pTx * tileSizeMinimap + tileSizeMinimap / 2;
+    const py = startY + pTy * tileSizeMinimap + tileSizeMinimap / 2;
+
+    const blink = Math.abs(Math.sin(Date.now() / 200));
+    this.ctx.fillStyle = `rgba(0, 242, 254, ${0.4 + blink * 0.6})`;
+    this.ctx.beginPath();
+    this.ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Aim Line Vector
+    this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.85)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.moveTo(px, py);
+    this.ctx.lineTo(px + Math.cos(this.player.angle) * 8, py + Math.sin(this.player.angle) * 8);
+    this.ctx.stroke();
+
+    this.ctx.restore(); // restore clipping
+
+    // 5. Draw Outer Radar Ring Overlays
+    this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    // Ticks Ring
+    this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.15)';
+    this.ctx.setLineDash([2, 6]);
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    // 6. Draw Circular Grid Lines inside Radar
+    this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.08)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, r * 0.33, 0, Math.PI * 2);
+    this.ctx.arc(cx, cy, r * 0.66, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - r, cy);
+    this.ctx.lineTo(cx + r, cy);
+    this.ctx.moveTo(cx, cy - r);
+    this.ctx.lineTo(cx, cy + r);
+    this.ctx.stroke();
+
+    // 7. Radar Sweeper Line Animation
+    const sweepAngle = (Date.now() / 800) % (Math.PI * 2);
+    this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.25)';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy);
+    this.ctx.lineTo(cx + Math.cos(sweepAngle) * r, cy + Math.sin(sweepAngle) * r);
+    this.ctx.stroke();
+
+    // Label
+    this.ctx.fillStyle = 'rgba(0, 242, 254, 0.65)';
+    this.ctx.font = 'bold 9px "Share Tech Mono", monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('SATELLITE RADAR', cx, cy - r - 8);
   }
 }
