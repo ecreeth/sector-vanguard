@@ -2,8 +2,10 @@ import { useState, useRef } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
 import { MainMenu } from './components/MainMenu';
+import { TransitionMenu } from './components/TransitionMenu';
 import type { GameEngine } from './game/Engine';
-import type { GameState, EngineStateUpdate, WeaponType } from './game/Types';
+import type { GameState, EngineStateUpdate, WeaponType, CampaignProgress } from './game/Types';
+import { loadCampaignProgress } from './game/Engine';
 import { sound } from './game/Sound';
 import { basesManager } from './game/Bases';
 import { enemiesManager } from './game/Enemies';
@@ -16,6 +18,7 @@ function App() {
   const [selectedBiome, setSelectedBiome] = useState<string>('FOREST');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [crtEnabled, setCrtEnabled] = useState<boolean>(true);
+  const [campaignProgress, setCampaignProgress] = useState<CampaignProgress>(() => loadCampaignProgress());
   
   // Track state updates directly from the GameEngine loop
   const [engineState, setEngineState] = useState<EngineStateUpdate | null>(null);
@@ -31,9 +34,12 @@ function App() {
 
   const handleStateUpdate = (update: EngineStateUpdate) => {
     setEngineState(update);
-    // Synced engine game over/victory state triggers transition in React UI
-    if (update.gameState !== 'PLAYING') {
-      setGameState(update.gameState);
+    // Always sync gameState so React UI reflects engine transitions
+    // (e.g. TRANSITION -> PLAYING when warping to next stage)
+    setGameState(update.gameState);
+    // On victory, refresh campaign progress from localStorage (engine saved it)
+    if (update.gameState === 'VICTORY') {
+      setCampaignProgress(loadCampaignProgress());
     }
   };
 
@@ -54,6 +60,12 @@ function App() {
     }
     setGameState('MENU');
     setEngineState(null);
+  };
+
+  const handleTransitionContinue = () => {
+    if (engineRef.current) {
+      engineRef.current.continueFromTransition();
+    }
   };
 
   const handleBuyUpgrade = (type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN') => {
@@ -215,6 +227,17 @@ function App() {
           setSelectedBiome={setSelectedBiome}
           crtEnabled={crtEnabled}
           onToggleCrt={() => setCrtEnabled(!crtEnabled)}
+          unlockedBiomes={campaignProgress.unlockedBiomes}
+        />
+      )}
+
+      {/* 3.5. Transition Warp Screen */}
+      {gameState === 'TRANSITION' && engineState && (
+        <TransitionMenu
+          stats={engineState.stats}
+          selectedBiome={selectedBiome}
+          onContinue={handleTransitionContinue}
+          onQuit={handleQuit}
         />
       )}
 

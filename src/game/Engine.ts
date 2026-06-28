@@ -1,4 +1,5 @@
-import type { GameState, EngineStateUpdate } from './Types';
+import type { GameState, EngineStateUpdate, CampaignProgress } from './Types';
+import { CAMPAIGN_STAGES_PER_SECTOR, BIOME_ORDER } from './Types';
 import { GameMap } from './Map';
 import { Player } from './Player';
 import { projectilesManager } from './Projectiles';
@@ -27,6 +28,8 @@ export class GameEngine {
   gameState: GameState = 'MENU';
   selectedBiome: string = 'FOREST';
   bossSpawned: boolean = false;
+  campaignStage: number = 1;
+  difficultyScale: number = 1.0;
   
   // Input Handling
   keys: Record<string, boolean> = {};
@@ -177,7 +180,9 @@ export class GameEngine {
     this.onStateUpdate({
       stats: this.player.getStats(
         basesManager.bases.filter(b => b.faction === 'PLAYER').length,
-        basesManager.bases.length
+        basesManager.bases.length,
+        this.campaignStage,
+        this.difficultyScale
       ),
       gameState: this.gameState,
       selectedBiome: this.selectedBiome,
@@ -188,6 +193,8 @@ export class GameEngine {
   // Starts the playing phase
   start(biome: string) {
     this.selectedBiome = biome;
+    this.campaignStage = 1;
+    this.difficultyScale = 1.0;
     this.map = new GameMap(biome);
     
     // Set player spawn coordinates centered in tile (3, 3)
@@ -202,7 +209,11 @@ export class GameEngine {
     projectilesManager.projectiles = [];
     projectilesManager.particles = [];
     basesManager.reset();
+    
     enemiesManager.reset();
+    enemiesManager.campaignStage = this.campaignStage;
+    enemiesManager.difficultyScale = this.difficultyScale;
+    
     lootManager.reset();
 
     this.gameState = 'PLAYING';
@@ -216,6 +227,75 @@ export class GameEngine {
     
     sound.startMusic();
     this.animationFrameId = requestAnimationFrame((timestamp) => this.loop(timestamp));
+  }
+
+  // Warps to the next campaign stage within the current biome run
+  startStage(stageNum: number) {
+    this.campaignStage = stageNum;
+    this.difficultyScale = 1.0 + (stageNum - 1) * 0.15;
+    
+    this.map = new GameMap(this.selectedBiome);
+    
+    const spawnX = 3 * this.map.tileSize + this.map.tileSize / 2;
+    const spawnY = 3 * this.map.tileSize + this.map.tileSize / 2;
+    
+    this.player.x = spawnX;
+    this.player.y = spawnY;
+    this.player.shield = this.player.maxShield;
+    this.player.health = this.player.maxHealth;
+    
+    this.cameraX = this.player.x - this.screenWidth / 2;
+    this.cameraY = this.player.y - this.screenHeight / 2;
+    
+    projectilesManager.projectiles = [];
+    projectilesManager.particles = [];
+    basesManager.reset();
+    
+    enemiesManager.reset();
+    enemiesManager.difficultyScale = this.difficultyScale;
+    enemiesManager.campaignStage = this.campaignStage;
+    
+    lootManager.reset();
+    
+    this.gameState = 'PLAYING';
+    this.bossSpawned = false;
+    this.lastTime = performance.now();
+
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+    sound.startMusic();
+    this.animationFrameId = requestAnimationFrame((timestamp) => this.loop(timestamp));
+  }
+
+  // Called from React TransitionMenu to advance to next stage after warp screen
+  continueFromTransition() {
+    if (this.gameState !== 'TRANSITION') return;
+    const nextStage = this.campaignStage + 1;
+    if (nextStage <= CAMPAIGN_STAGES_PER_SECTOR) {
+      this.startStage(nextStage);
+    }
+  }
+
+  // Called when boss is defeated to mark sector complete
+  completeSector(): CampaignProgress {
+    const saved = loadCampaignProgress();
+    const currentStages = saved.highestStageCleared[this.selectedBiome] || 0;
+    if (this.campaignStage > currentStages) {
+      saved.highestStageCleared[this.selectedBiome] = this.campaignStage;
+    }
+    // Unlock next biome if current sector fully cleared (stage 5 boss defeated)
+    if (this.campaignStage >= CAMPAIGN_STAGES_PER_SECTOR) {
+      const currentIdx = BIOME_ORDER.indexOf(this.selectedBiome as typeof BIOME_ORDER[number]);
+      if (currentIdx >= 0 && currentIdx < BIOME_ORDER.length - 1) {
+        const nextBiome = BIOME_ORDER[currentIdx + 1];
+        if (!saved.unlockedBiomes.includes(nextBiome)) {
+          saved.unlockedBiomes.push(nextBiome);
+        }
+      }
+    }
+    saveCampaignProgress(saved);
+    return saved;
   }
 
   stop() {
@@ -430,18 +510,31 @@ export class GameEngine {
     } else {
       const playerBases = basesManager.bases.filter(b => b.faction === 'PLAYER').length;
       
-      // Boss triggers when all 4 bases are captured
       if (playerBases === basesManager.bases.length) {
-        if (!this.bossSpawned) {
-          this.bossSpawned = true;
-          // Spawn the Sector Overseer Boss Mech at map center (1280, 1280)
-          enemiesManager.spawnEnemy(1280, 1280, 'BOSS');
-          sound.playShieldRegen(); // alarm visual sound cue
+        if (this.campaignStage < 5) {
+          // Non-boss stages: Activate Warp Portal
+          this.map.portalActive = true;
+          
+          // Check player warp collision
+          const pdx = this.player.x - this.map.portalX;
+          const pdy = this.player.y - this.map.portalY;
+          const dist = Math.sqrt(pdx * pdx + pdy * pdy);
+          if (dist < 40) {
+            this.gameState = 'TRANSITION';
+            sound.playCaptureComplete();
+          }
         } else {
-          // If boss is spawned, victory only when boss is destroyed
-          const bossDead = !enemiesManager.enemies.some(e => e.type === 'BOSS' && !e.isDead);
-          if (bossDead) {
-            this.gameState = 'VICTORY';
+          // Stage 5: Spawn final Sector Overseer Boss
+          if (!this.bossSpawned) {
+            this.bossSpawned = true;
+            enemiesManager.spawnEnemy(1280, 1280, 'BOSS');
+            sound.playShieldRegen();
+          } else {
+            const bossDead = !enemiesManager.enemies.some(e => e.type === 'BOSS' && !e.isDead);
+            if (bossDead) {
+              this.completeSector();
+              this.gameState = 'VICTORY';
+            }
           }
         }
       }
@@ -457,7 +550,9 @@ export class GameEngine {
     this.onStateUpdate({
       stats: this.player.getStats(
         basesManager.bases.filter(b => b.faction === 'PLAYER').length,
-        basesManager.bases.length
+        basesManager.bases.length,
+        this.campaignStage,
+        this.difficultyScale
       ),
       gameState: this.gameState,
       selectedBiome: this.selectedBiome,
@@ -724,5 +819,31 @@ export class GameEngine {
     this.ctx.font = 'bold 9px "Share Tech Mono", monospace';
     this.ctx.textAlign = 'center';
     this.ctx.fillText('SATELLITE RADAR', cx, cy - r - 8);
+  }
+}
+
+// Campaign Progress localStorage helpers
+const STORAGE_KEY = 'sector_vanguard_campaign';
+
+export function loadCampaignProgress(): CampaignProgress {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw) as CampaignProgress;
+    }
+  } catch {
+    // corrupted data, fall through to default
+  }
+  return {
+    unlockedBiomes: ['FOREST'],
+    highestStageCleared: {}
+  };
+}
+
+export function saveCampaignProgress(progress: CampaignProgress) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  } catch {
+    // storage full or unavailable, silently ignore
   }
 }

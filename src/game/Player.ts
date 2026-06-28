@@ -334,7 +334,7 @@ export class Player {
   }
 
   // Get formatted stats to pass to React HUD
-  getStats(capturedCount: number, totalBases: number): PlayerStats {
+  getStats(capturedCount: number, totalBases: number, campaignStage: number = 1, difficultyScale: number = 1.0): PlayerStats {
     const currentWep = this.weapons[this.currentWeaponType];
     const dashCooldPercent = this.dashCooldown > 0 ? this.dashCooldown / this.dashMaxCooldown : 0;
     
@@ -384,7 +384,9 @@ export class Player {
       bossMaxHp: boss ? boss.maxHp : 0,
       godMode: this.godMode,
       squadOrder: enemiesManager.squadOrder,
-      activeDefendersCount: enemiesManager.enemies.filter(e => e.isFriendly && e.type === 'DEFENDER' && !e.isDead).length
+      activeDefendersCount: enemiesManager.enemies.filter(e => e.isFriendly && e.type === 'DEFENDER' && !e.isDead).length,
+      campaignStage,
+      difficultyScale
     };
   }
 

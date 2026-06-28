@@ -64,6 +64,18 @@ export const HUD: React.FC<HUDProps> = ({
           }}>
             {stats.capturedBasesCount} / {stats.totalBasesCount}
           </span>
+          <span style={{ 
+            marginLeft: 16,
+            padding: '2px 8px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            letterSpacing: '1px',
+            color: stats.campaignStage >= 5 ? 'var(--neon-red)' : 'var(--neon-yellow)',
+            border: `1px solid ${stats.campaignStage >= 5 ? 'var(--neon-red)' : 'var(--neon-yellow)'}`,
+            borderRadius: '3px'
+          }}>
+            STAGE {stats.campaignStage}/5
+          </span>
         </div>
 
         {/* Dynamic Capturing Alert */}

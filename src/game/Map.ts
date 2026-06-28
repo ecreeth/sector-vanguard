@@ -33,6 +33,13 @@ export class GameMap {
   }> = [];
   shieldNodes: Array<{ x: number; y: number; radius: number }> = [];
 
+  // Warp Portal components
+  portalActive: boolean = false;
+  portalX: number = 1280;
+  portalY: number = 1280;
+  portalRadius: number = 40;
+  portalAngle: number = 0;
+
   constructor(biome: string) {
     this.width = 40; // 40 tiles wide
     this.height = 40; // 40 tiles high
@@ -870,6 +877,53 @@ export class GameMap {
         ctx.lineTo(sx - 45, sy + 30);
       }
       ctx.stroke();
+    }
+
+    // Draw Warp Portal if active
+    if (this.portalActive) {
+      this.portalAngle += 0.05;
+      
+      const px = this.portalX - cameraX;
+      const py = this.portalY - cameraY;
+      
+      if (px + this.portalRadius > 0 && px - this.portalRadius < screenWidth &&
+          py + this.portalRadius > 0 && py - this.portalRadius < screenHeight) {
+        // Outer glowing ring
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(px, py, this.portalRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#c084fc';
+        ctx.stroke();
+        ctx.restore();
+        
+        // Swirling inner rings
+        for (let i = 0; i < 3; i++) {
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(this.portalAngle * (i % 2 === 0 ? 1 : -1) + (i * Math.PI / 1.5));
+          
+          ctx.beginPath();
+          ctx.ellipse(0, 0, this.portalRadius - 8 - i * 8, (this.portalRadius - 8 - i * 8) * 0.4, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = i === 1 ? '#00f2fe' : '#f97316';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+        
+        // Floating indicator label
+        ctx.save();
+        ctx.font = 'bold 9px monospace';
+        ctx.fillStyle = '#c084fc';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#c084fc';
+        ctx.fillText('WARP PORTAL ACTIVE', px, py - this.portalRadius - 14);
+        ctx.fillText('ENTER TO SECTOR WARP', px, py - this.portalRadius - 4);
+        ctx.restore();
+      }
     }
   }
 }

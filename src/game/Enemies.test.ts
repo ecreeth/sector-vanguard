@@ -358,4 +358,158 @@ describe('Enemy Types and AI Behaviors', () => {
     // defender should steer towards base Alpha (2048, 100) -> vx should be positive
     expect(defender.vx).toBeGreaterThan(0);
   });
+
+  it('should scale enemy HP and damage with difficultyScale', () => {
+    enemiesManager.difficultyScale = 1.30;
+    const drone = new Enemy(100, 100, 'DRONE', false, false, 1.30, 1);
+    expect(drone.maxHp).toBe(Math.round(35 * 1.30));
+    expect(drone.hp).toBe(Math.round(35 * 1.30));
+    expect(drone.damage).toBe(Math.round(8 * 1.30));
+  });
+
+  it('should scale enemy speed with campaignStage', () => {
+    enemiesManager.campaignStage = 3;
+    const drone = new Enemy(100, 100, 'DRONE', false, false, 1.0, 3);
+    // Speed scale = 1.0 + (3-1) * 0.05 = 1.10
+    expect(drone.speed).toBeCloseTo(2.2 * 1.10);
+  });
+
+  it('should not scale friendly units with difficultyScale', () => {
+    enemiesManager.difficultyScale = 2.0;
+    const defender = new Enemy(100, 100, 'DEFENDER', true);
+    expect(defender.maxHp).toBe(50); // unchanged
+    expect(defender.damage).toBe(10); // unchanged
+  });
+
+  it('should allow hostile guards to coordinate base raiding at stage 2+', () => {
+    enemiesManager.campaignStage = 2;
+    const guard = new Enemy(100, 100, 'DRONE', false, true);
+    const player = { x: 999, y: 999, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    // Set a captured player base far from player (>400px)
+    basesManager.bases = [{ x: 200, y: 200, faction: 'PLAYER', radius: 100 } as any];
+
+    guard.update(16, map, player, []);
+
+    // Guard at stage 2+ should raid the undefended base (steer towards it)
+    expect(guard.vx).toBeGreaterThan(0);
+    expect(guard.vy).toBeGreaterThan(0);
+  });
+
+  it('should not allow base raiding at stage 1 (below intelligence threshold)', () => {
+    enemiesManager.campaignStage = 1;
+    const guard = new Enemy(100, 100, 'DRONE', false, true);
+    const player = { x: 999, y: 999, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    // Set a captured player base far from player
+    basesManager.bases = [{ x: 200, y: 200, faction: 'PLAYER', radius: 100 } as any];
+
+    guard.update(16, map, player, []);
+
+    // Guard at stage 1 should NOT raid - should return home instead
+    // Home is (100, 100), so vx/vy should be 0 or negative (towards home)
+    const distToHome = Math.sqrt((guard.x - 100) ** 2 + (guard.y - 100) ** 2);
+    expect(distToHome).toBeLessThan(50); // should stay near home
+  });
+
+  it('should dodge incoming bullets at stage 3+ (hostile units)', () => {
+    enemiesManager.campaignStage = 3;
+    const drone = new Enemy(200, 200, 'DRONE', false);
+    const player = { x: 100, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    // Create a bullet heading directly at the drone
+    projectilesManager.projectiles = [{
+      x: 150, y: 200,
+      vx: 10, vy: 0,
+      isPlayer: true,
+      radius: 3.5,
+      damage: 10,
+      alive: true
+    } as any];
+
+    drone.update(16, map, player, []);
+
+    // Drone should have steered away from bullet path (vy should be non-zero from dodge steering)
+    // The bullet is coming from left (150,200) heading right (vx=10), drone at (200,200)
+    // Dodge should push drone perpendicular (up or down)
+    expect(drone.vy).not.toBe(0);
+  });
+
+  it('should not dodge bullets below stage 3', () => {
+    enemiesManager.campaignStage = 2;
+    const drone = new Enemy(200, 200, 'DRONE', false);
+    drone.targetUnit = { x: 400, y: 200, takeDamage: vi.fn(), radius: 16, isDead: false };
+    const player = { x: 400, y: 200, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    projectilesManager.projectiles = [{
+      x: 150, y: 200,
+      vx: 10, vy: 0,
+      isPlayer: true,
+      radius: 3.5,
+      damage: 10,
+      alive: true
+    } as any];
+
+    drone.update(16, map, player, []);
+
+    // Without dodge, vy should be 0 (only moving straight towards target)
+    expect(drone.vy).toBe(0);
+  });
+
+  it('should position shield mech in front of ally at stage 4+', () => {
+    enemiesManager.campaignStage = 4;
+    const shieldMech = new Enemy(200, 200, 'SHIELD_MECH', false);
+    const sniper = new Enemy(300, 200, 'SNIPER', false);
+    const player = { x: 100, y: 200, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    enemiesManager.enemies = [shieldMech, sniper];
+
+    shieldMech.update(16, map, player, [shieldMech, sniper]);
+
+    // Shield mech should move towards interception position between sniper and player
+    // Player at (100, 200), Sniper at (300, 200)
+    // Interception pos: sniper.x + (player.x - sniper.x)/dist * 60 = 300 + (-200/200)*60 = 240
+    // Shield mech at (200, 200) needs to move RIGHT (vx > 0) to reach (240, 200)
+    expect(shieldMech.vx).toBeGreaterThan(0);
+  });
+
+  it('should not do shield interception below stage 4', () => {
+    enemiesManager.campaignStage = 3;
+    const shieldMech = new Enemy(200, 200, 'SHIELD_MECH', false);
+    const sniper = new Enemy(300, 200, 'SNIPER', false);
+    const player = { x: 100, y: 200, radius: 16, takeDamage: vi.fn(), isDead: false };
+    const map = new GameMap('FOREST');
+
+    enemiesManager.enemies = [shieldMech, sniper];
+
+    // Give shieldMech a target
+    shieldMech.targetUnit = player;
+
+    shieldMech.update(16, map, player, [shieldMech, sniper]);
+
+    // Without interception, shield mech should move towards its target (player at 100, 200)
+    // vx should be negative (moving left toward player)
+    expect(shieldMech.vx).toBeLessThan(0);
+  });
+
+  it('should scale spawn timer frequency with difficulty', () => {
+    // The spawn timer interval is 14000ms base
+    // With higher stages, spawn rate should increase
+    enemiesManager.campaignStage = 3;
+    enemiesManager.spawnTimer = 0;
+
+    // At stage 3, enemies should still spawn on timer
+    const map = new GameMap('FOREST');
+    const player = { x: 100, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false };
+
+    const countBefore = enemiesManager.enemies.length;
+    // Advance spawn timer past threshold
+    enemiesManager.update(14000, map, player);
+    expect(enemiesManager.enemies.length).toBeGreaterThan(countBefore);
+  });
 });

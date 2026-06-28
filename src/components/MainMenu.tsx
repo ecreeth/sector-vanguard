@@ -7,6 +7,7 @@ interface MainMenuProps {
   setSelectedBiome: (biome: string) => void;
   crtEnabled: boolean;
   onToggleCrt: () => void;
+  unlockedBiomes?: string[];
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -14,7 +15,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   selectedBiome,
   setSelectedBiome,
   crtEnabled,
-  onToggleCrt
+  onToggleCrt,
+  unlockedBiomes = ['FOREST']
 }) => {
   const [showManual, setShowManual] = useState(false);
   const biomes = [
@@ -65,25 +67,39 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       <div style={styles.selectionArea} className="hud-panel">
         <div style={styles.sectionTitle}>SELECT DROP ZONE BIOME</div>
         <div style={styles.biomeList}>
-          {biomes.map((b) => (
-            <div
-              key={b.id}
-              onClick={() => setSelectedBiome(b.id)}
-              style={{
-                ...styles.biomeCard,
-                borderColor: selectedBiome === b.id ? b.color : 'rgba(255, 255, 255, 0.08)',
-                background: selectedBiome === b.id ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.4)'
-              }}
-            >
-              <div style={{ ...styles.biomeName, color: b.color }}>{b.name}</div>
-              <div style={styles.biomeDesc}>{b.desc}</div>
-              {selectedBiome === b.id && (
-                <div style={{ ...styles.activeIndicator, backgroundColor: b.color }}>
-                  ZONE CALIBRATED
+          {biomes.map((b) => {
+            const isLocked = b.id !== 'DEV_SANDBOX' && !unlockedBiomes.includes(b.id);
+            return (
+              <div
+                key={b.id}
+                onClick={() => {
+                  if (!isLocked) setSelectedBiome(b.id);
+                }}
+                style={{
+                  ...styles.biomeCard,
+                  borderColor: selectedBiome === b.id ? b.color : 'rgba(255, 255, 255, 0.08)',
+                  background: selectedBiome === b.id ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.4)',
+                  opacity: isLocked ? 0.4 : 1,
+                  cursor: isLocked ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <div style={{ ...styles.biomeName, color: b.color }}>
+                  {isLocked && '🔒 '}{b.name}
                 </div>
-              )}
-            </div>
-          ))}
+                <div style={styles.biomeDesc}>{b.desc}</div>
+                {selectedBiome === b.id && !isLocked && (
+                  <div style={{ ...styles.activeIndicator, backgroundColor: b.color }}>
+                    ZONE CALIBRATED
+                  </div>
+                )}
+                {isLocked && (
+                  <div style={{ ...styles.activeIndicator, backgroundColor: 'var(--text-muted)', color: '#000' }}>
+                    LOCKED — CLEAR PREVIOUS SECTOR
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -151,7 +167,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </button>
 
         <button 
-          onClick={() => onStartGame(selectedBiome)} 
+          onClick={() => {
+            const isLocked = selectedBiome !== 'DEV_SANDBOX' && !unlockedBiomes.includes(selectedBiome);
+            if (!isLocked) onStartGame(selectedBiome);
+          }}
           style={styles.deployBtn} 
           className="sci-fi-button success"
         >

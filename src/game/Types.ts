@@ -1,6 +1,6 @@
 // Shared types for Sector Vanguard
 
-export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY';
+export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'TRANSITION';
 
 export type WeaponType = 'PISTOL' | 'SHOTGUN' | 'PLASMA_RIFLE';
 
@@ -76,6 +76,8 @@ export interface PlayerStats {
   godMode: boolean;
   squadOrder?: SquadOrder;
   activeDefendersCount?: number;
+  campaignStage: number;
+  difficultyScale: number;
 }
 
 export type DefenseType = 'NONE' | 'TURRET' | 'SHIELD' | 'RADAR';
@@ -91,3 +93,18 @@ export interface EngineStateUpdate {
     faction: 'NEUTRAL' | 'PLAYER' | 'ENEMY';
   } | null;
 }
+
+export const BIOME_ORDER = ['FOREST', 'WASTELAND', 'TUNDRA', 'CYBER'] as const;
+export type BiomeId = typeof BIOME_ORDER[number];
+
+export interface CampaignProgress {
+  unlockedBiomes: string[];
+  highestStageCleared: Record<string, number>;
+}
+
+export const CAMPAIGN_STAGES_PER_SECTOR = 5;
+
+export const DEFAULT_CAMPAIGN_PROGRESS: CampaignProgress = {
+  unlockedBiomes: ['FOREST'],
+  highestStageCleared: {}
+};

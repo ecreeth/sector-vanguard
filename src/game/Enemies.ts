@@ -56,7 +56,7 @@ export class Enemy {
     this.plasmaBurnTimer = 500; // every 500ms
   }
 
-  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean, isGuard: boolean = false) {
+  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean, isGuard: boolean = false, difficultyScale: number = 1.0, campaignStage: number = 1) {
     this.x = x;
     this.y = y;
     this.type = type;
@@ -159,6 +159,17 @@ export class Enemy {
         this.damage = 0;
         this.visionRange = 0;
         break;
+    }
+
+    if (!this.isFriendly && this.type !== 'PORTAL' && this.type !== 'DECOY') {
+      const scale = difficultyScale || 1.0;
+      this.hp = Math.round(this.hp * scale);
+      this.maxHp = Math.round(this.maxHp * scale);
+      this.damage = Math.round(this.damage * scale);
+      
+      const stage = campaignStage || 1;
+      const speedScale = 1.0 + (stage - 1) * 0.05;
+      this.speed = this.speed * speedScale;
     }
   }
 
@@ -507,7 +518,50 @@ export class Enemy {
       let steerX = 0;
       let steerY = 0;
 
-      if (this.targetUnit) {
+      let shieldMechIntercepted = false;
+      if (this.type === 'SHIELD_MECH' && !this.isFriendly && enemiesManager.campaignStage >= 4) {
+        let bestAlly: Enemy | null = null;
+        let minAllyDist = 350;
+        
+        otherEnemies.forEach(e => {
+          if (!e.isFriendly && !e.isDead && e !== this && (e.type === 'SNIPER' || e.type === 'PORTAL' || e.type === 'MECH')) {
+            const adx = e.x - this.x;
+            const ady = e.y - this.y;
+            const adist = Math.sqrt(adx*adx + ady*ady);
+            if (adist < minAllyDist) {
+              minAllyDist = adist;
+              bestAlly = e;
+            }
+          }
+        });
+        
+        if (bestAlly) {
+          const pdx = player.x - bestAlly.x;
+          const pdy = player.y - bestAlly.y;
+          const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+          if (pdist > 0) {
+            const targetX = bestAlly.x + (pdx / pdist) * 60;
+            const targetY = bestAlly.y + (pdy / pdist) * 60;
+            
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 8) {
+              steerX = dx / dist;
+              steerY = dy / dist;
+            }
+            shieldMechIntercepted = true;
+            this.targetUnit = player;
+          }
+        }
+      }
+
+      // If not doing shield interception, proceed with normal target selection
+      if (!shieldMechIntercepted) {
+        // Target selection already happened above
+      }
+
+      if (this.targetUnit && !shieldMechIntercepted) {
         // Seek target
         const dx = this.targetUnit.x - this.x;
         const dy = this.targetUnit.y - this.y;
@@ -626,7 +680,35 @@ export class Enemy {
         }
       } else {
         // Hostile mech has no target unit
-        if (this.isGuard) {
+        let coordinateBaseRaid = false;
+        let raidTargetBase: any = null;
+        if (this.isGuard && !this.isFriendly && this.type !== 'TURRET' && enemiesManager.campaignStage >= 2) {
+          let minRaidDist = Infinity;
+          basesManager.bases.forEach(b => {
+            if (b.faction === 'PLAYER') {
+              const pdx = player.x - b.x;
+              const pdy = player.y - b.y;
+              const playerDist = Math.sqrt(pdx * pdx + pdy * pdy);
+              if (playerDist > 400) {
+                const defenderNear = otherEnemies.some(u => u.isFriendly && u.type === 'DEFENDER' && !u.isDead && Math.sqrt((u.x - b.x) ** 2 + (u.y - b.y) ** 2) < 300);
+                if (!defenderNear) {
+                  const bdx = b.x - this.x;
+                  const bdy = b.y - this.y;
+                  const baseDist = Math.sqrt(bdx * bdx + bdy * bdy);
+                  if (baseDist < minRaidDist) {
+                    minRaidDist = baseDist;
+                    raidTargetBase = b;
+                  }
+                }
+              }
+            }
+          });
+          if (raidTargetBase) {
+            coordinateBaseRaid = true;
+          }
+        }
+
+        if (this.isGuard && !coordinateBaseRaid) {
           // Guard return home/patrol behavior: do NOT assault other bases, stay at patrolX, patrolY!
           const homeDx = this.patrolX - this.x;
           const homeDy = this.patrolY - this.y;
@@ -651,9 +733,9 @@ export class Enemy {
           }
         } else {
           // Check if hostile unit should assault a player-secured or neutral outpost base
-          let assaultBase: { x: number, y: number, radius: number } | null = null;
+          let assaultBase: { x: number, y: number, radius: number } | null = coordinateBaseRaid ? raidTargetBase : null;
 
-          if (!this.isFriendly && this.type !== 'TURRET') {
+          if (!this.isFriendly && this.type !== 'TURRET' && !coordinateBaseRaid) {
             let minBaseDist = Infinity;
             basesManager.bases.forEach(b => {
               if (b.faction !== 'ENEMY') { // target PLAYER and NEUTRAL bases
@@ -715,7 +797,9 @@ export class Enemy {
       let dodgeSteerY = 0;
       let threatsCount = 0;
 
-      projectilesManager.projectiles.forEach(p => {
+      const canDodge = this.isFriendly || (!this.isFriendly && enemiesManager.campaignStage >= 3);
+      if (canDodge) {
+        projectilesManager.projectiles.forEach(p => {
         // Only dodge opponent's bullets (hostiles dodge player, friendlies dodge enemy)
         if (p.isPlayer !== this.isFriendly) {
           const dx = this.x - p.x;
@@ -769,6 +853,7 @@ export class Enemy {
           }
         }
       });
+    }
 
       // Integrate dodging forces into pathing vectors
       if (threatsCount > 0) {
@@ -1374,6 +1459,8 @@ export class EnemiesManager {
   playerRef: any = null;
   defenderOrbitAngle: number = 0;
   squadOrder: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY' = 'DEFEND';
+  difficultyScale: number = 1.0;
+  campaignStage: number = 1;
 
   cycleSquadOrder() {
     if (this.squadOrder === 'DEFEND') {
@@ -1396,6 +1483,8 @@ export class EnemiesManager {
     this.playerRef = null;
     this.defenderOrbitAngle = 0;
     this.squadOrder = 'DEFEND';
+    this.difficultyScale = 1.0;
+    this.campaignStage = 1;
     
     // Spawn initial guards around bases
     // Base Alpha (ENEMY, 2048, 512): Spawn turrets and drones
@@ -1421,7 +1510,7 @@ export class EnemiesManager {
   }
 
   spawnEnemy(x: number, y: number, type: EnemyType, isGuard: boolean = false) {
-    this.enemies.push(new Enemy(x, y, type, false, isGuard));
+    this.enemies.push(new Enemy(x, y, type, false, isGuard, this.difficultyScale, this.campaignStage));
   }
 
   spawnDefender(x: number, y: number) {
