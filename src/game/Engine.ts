@@ -83,6 +83,14 @@ export class GameEngine {
       const worldY = this.mouseY + this.cameraY;
       this.player?.triggerDecoy(worldX, worldY);
     }
+    if (e.key === 'f' || e.key === 'F') {
+      const nextOrder = enemiesManager.cycleSquadOrder();
+      sound.playOrderChange();
+      let color = '#00f2fe';
+      if (nextOrder === 'ESCORT') color = '#39ff14';
+      if (nextOrder === 'SEARCH_AND_DESTROY') color = '#f97316';
+      projectilesManager.spawnText(this.player.x, this.player.y - 35, `SQUAD: ${nextOrder}`, color);
+    }
   };
 
   private handleKeyUp = (e: KeyboardEvent) => {
@@ -392,7 +400,7 @@ export class GameEngine {
       isPlayer: true
     });
 
-    projectilesManager.update(dt, this.map, targets);
+    projectilesManager.update(dt, this.map, targets, basesManager.bases);
 
     // 7. Update camera position to center on player smoothly (LERP)
     const targetCamX = this.player.x - this.screenWidth / 2;

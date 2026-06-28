@@ -20,7 +20,8 @@ interface HUDProps {
   onPause: () => void;
   onQuit: () => void;
   onBuyUpgrade: (type: 'HEALTH' | 'SHIELD' | 'DASH' | 'RICOCHET' | 'PIERCE' | 'PLASMA_BURN') => void;
-  onBuildTurret: () => void;
+  onBuildDefense: (defense: 'TURRET' | 'SHIELD' | 'RADAR') => void;
+  onSetSquadOrder: (order: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY') => void;
   selectedBiome?: string;
   onDevAction?: (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn', data?: any) => void;
 }
@@ -36,11 +37,12 @@ export const HUD: React.FC<HUDProps> = ({
   onPause,
   onQuit,
   onBuyUpgrade,
-  onBuildTurret,
+  onBuildDefense,
+  onSetSquadOrder,
   selectedBiome,
   onDevAction
 }) => {
-  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades, godMode } = stats;
+  const { health, maxHealth, shield, maxShield, dashCooldown, credits, currentWeapon, ammo, maxAmmo, weapons, skills, upgrades, godMode, squadOrder } = stats;
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -226,28 +228,130 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
           ))}
 
-          {/* Build Turret Button */}
-          <button
-            onClick={onBuildTurret}
-            disabled={credits < 200}
-            style={{
-              ...hudStyles.shopBuyBtn,
-              width: '100%',
-              padding: '6px 0',
-              borderColor: credits >= 200 ? '#f97316' : 'var(--border-color)',
-              color: credits >= 200 ? '#f97316' : 'var(--text-muted)',
-              cursor: credits >= 200 ? 'pointer' : 'not-allowed',
-              opacity: credits >= 200 ? 1 : 0.4,
-              fontSize: '11px',
-              letterSpacing: '1px',
-              marginTop: 4,
-              textAlign: 'center'
-            }}
-          >
-            🔫 BUILD BASE TURRET — 200 CR
-          </button>
+          {/* Outpost Defenses Section */}
+          <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+              OUTPOST DEFENSES (NEAREST BASE)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <button
+                onClick={() => onBuildDefense('TURRET')}
+                disabled={credits < 200}
+                style={{
+                  ...hudStyles.shopBuyBtn,
+                  width: '100%',
+                  padding: '4px 0',
+                  borderColor: credits >= 200 ? '#39ff14' : 'var(--border-color)',
+                  color: credits >= 200 ? '#39ff14' : 'var(--text-muted)',
+                  cursor: credits >= 200 ? 'pointer' : 'not-allowed',
+                  opacity: credits >= 200 ? 1 : 0.4,
+                  fontSize: '10px',
+                  textAlign: 'center'
+                }}
+              >
+                🔫 AUTO-TURRET — 200 CR
+              </button>
+
+              <button
+                onClick={() => onBuildDefense('SHIELD')}
+                disabled={credits < 250}
+                style={{
+                  ...hudStyles.shopBuyBtn,
+                  width: '100%',
+                  padding: '4px 0',
+                  borderColor: credits >= 250 ? '#00f2fe' : 'var(--border-color)',
+                  color: credits >= 250 ? '#00f2fe' : 'var(--text-muted)',
+                  cursor: credits >= 250 ? 'pointer' : 'not-allowed',
+                  opacity: credits >= 250 ? 1 : 0.4,
+                  fontSize: '10px',
+                  textAlign: 'center'
+                }}
+              >
+                🛡️ DEFENSE SHIELD — 250 CR
+              </button>
+
+              <button
+                onClick={() => onBuildDefense('RADAR')}
+                disabled={credits < 180}
+                style={{
+                  ...hudStyles.shopBuyBtn,
+                  width: '100%',
+                  padding: '4px 0',
+                  borderColor: credits >= 180 ? '#39ff14' : 'var(--border-color)',
+                  color: credits >= 180 ? '#39ff14' : 'var(--text-muted)',
+                  cursor: credits >= 180 ? 'pointer' : 'not-allowed',
+                  opacity: credits >= 180 ? 1 : 0.4,
+                  fontSize: '10px',
+                  textAlign: 'center'
+                }}
+              >
+                📡 COMMS RADAR — 180 CR
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* SQUAD RADIO COMMANDS PANEL */}
+      <div style={{
+        position: 'absolute',
+        bottom: '102px', // positioned above the skills bar
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '4px',
+        pointerEvents: 'auto'
+      }}>
+        <div style={{
+          fontSize: '9px',
+          color: 'var(--text-secondary)',
+          fontWeight: 'bold',
+          letterSpacing: '1px',
+          textShadow: '0 0 5px rgba(255, 255, 255, 0.15)'
+        }}>
+          SQUAD RADIO COMMANDS [F]
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: '6px',
+          background: 'rgba(0, 0, 0, 0.5)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          border: '1px solid var(--border-color)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+        }}>
+          {([
+            { order: 'DEFEND' as const, label: '🛡️ DEFEND', color: '#00f2fe' },
+            { order: 'ESCORT' as const, label: '🟢 ESCORT', color: '#39ff14' },
+            { order: 'SEARCH_AND_DESTROY' as const, label: '🔥 ASSAULT', color: '#f97316' }
+          ]).map(cmd => {
+            const isActive = squadOrder === cmd.order;
+            return (
+              <button
+                key={cmd.order}
+                onClick={() => onSetSquadOrder(cmd.order)}
+                style={{
+                  background: isActive ? `${cmd.color}15` : 'transparent',
+                  border: `1px solid ${isActive ? cmd.color : 'rgba(255, 255, 255, 0.15)'}`,
+                  color: isActive ? '#ffffff' : 'var(--text-muted)',
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  padding: '3px 8px',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: isActive ? `0 0 6px ${cmd.color}40` : 'none',
+                  textShadow: isActive ? `0 0 4px #ffffff` : 'none'
+                }}
+              >
+                {cmd.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 3. BOTTOM CENTER SKILLS HOTBAR */}
       <div style={hudStyles.skillsBar} className="hud-panel">

@@ -31,6 +31,7 @@ describe('Enemy Types and AI Behaviors', () => {
     projectilesManager.projectiles = [];
     projectilesManager.particles = [];
     enemiesManager.reset();
+    basesManager.reset();
   });
 
   it('should initialize stats according to enemy type', () => {
@@ -321,5 +322,40 @@ describe('Enemy Types and AI Behaviors', () => {
     // Since target is (155, 100) and defender is at (100, 100), steerX should be positive
     expect(defender.vx).toBeGreaterThan(0);
     expect(defender.vy).toBe(0);
+  });
+
+  it('should seek player from far away under ESCORT squad order', () => {
+    const defender = new Enemy(100, 100, 'DEFENDER', true);
+    defender.patrolRadius = 0;
+    // Player is at (800, 100) -> which is > 250px away
+    const player = { x: 800, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false, isMoving: false };
+    const map = new GameMap('FOREST');
+
+    // Default order (DEFEND): should NOT seek because player is too far
+    defender.update(16.66, map, player, []);
+    expect(defender.vx).toBe(0);
+
+    // Set squadOrder to ESCORT: should now seek player
+    enemiesManager.squadOrder = 'ESCORT';
+    defender.update(16.66, map, player, []);
+    expect(defender.vx).toBeGreaterThan(0);
+  });
+
+  it('should march towards non-player base under SEARCH_AND_DESTROY squad order', () => {
+    const defender = new Enemy(100, 100, 'DEFENDER', true);
+    const player = { x: 100, y: 100, radius: 16, takeDamage: vi.fn(), isDead: false, isMoving: false };
+    const map = new GameMap('FOREST');
+
+    // Force base Alpha (at 2048, 512) to be ENEMY owned
+    basesManager.bases[0].faction = 'ENEMY';
+    basesManager.bases[0].x = 2048;
+    basesManager.bases[0].y = 100;
+
+    // Set squadOrder to SEARCH_AND_DESTROY
+    enemiesManager.squadOrder = 'SEARCH_AND_DESTROY';
+    defender.update(16.66, map, player, []);
+
+    // defender should steer towards base Alpha (2048, 100) -> vx should be positive
+    expect(defender.vx).toBeGreaterThan(0);
   });
 });

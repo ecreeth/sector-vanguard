@@ -414,6 +414,29 @@ class SoundManager {
     osc.start(time);
     osc.stop(time + 0.25);
   }
+
+  playOrderChange() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const time = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, time);
+    osc.frequency.setValueAtTime(800, time + 0.05);
+
+    gain.gain.setValueAtTime(0.08, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+
+    osc.start(time);
+    osc.stop(time + 0.1);
+  }
 }
 
 export const sound = new SoundManager();

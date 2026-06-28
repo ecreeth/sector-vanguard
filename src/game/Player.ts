@@ -382,7 +382,8 @@ export class Player {
       bossActive: !!boss,
       bossHp: boss ? Math.ceil(boss.hp) : 0,
       bossMaxHp: boss ? boss.maxHp : 0,
-      godMode: this.godMode
+      godMode: this.godMode,
+      squadOrder: enemiesManager.squadOrder
     };
   }
 

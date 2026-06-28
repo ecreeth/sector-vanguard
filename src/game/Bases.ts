@@ -15,9 +15,16 @@ export interface BaseConfig {
   capturingFaction: FactionType | null;
   
   // Expansion base defense
+  defenseType?: 'NONE' | 'TURRET' | 'SHIELD' | 'RADAR';
   hasTurret?: boolean;
   turretCooldown?: number;
   turretAngle?: number;
+
+  // Shield stats
+  shieldHp?: number;
+  maxShieldHp?: number;
+  shieldRechargeTimer?: number;
+  shieldOfflineTimer?: number;
 }
 
 export class BasesManager {
@@ -39,7 +46,8 @@ export class BasesManager {
         radius: 120,
         faction: 'ENEMY', // Captured by enemies initially
         progress: 100,
-        capturingFaction: null
+        capturingFaction: null,
+        defenseType: 'NONE'
       },
       {
         id: 'beta',
@@ -49,7 +57,8 @@ export class BasesManager {
         radius: 120,
         faction: 'NEUTRAL',
         progress: 0,
-        capturingFaction: null
+        capturingFaction: null,
+        defenseType: 'NONE'
       },
       {
         id: 'gamma',
@@ -59,7 +68,8 @@ export class BasesManager {
         radius: 140,
         faction: 'NEUTRAL',
         progress: 0,
-        capturingFaction: null
+        capturingFaction: null,
+        defenseType: 'NONE'
       },
       {
         id: 'delta',
@@ -69,7 +79,8 @@ export class BasesManager {
         radius: 120,
         faction: 'ENEMY',
         progress: 100,
-        capturingFaction: null
+        capturingFaction: null,
+        defenseType: 'NONE'
       }
     ];
     this.incomeTimer = 0;
@@ -81,7 +92,8 @@ export class BasesManager {
     return this.bases.map(b => ({
       x: b.x,
       y: b.y,
-      isPlayerFaction: b.faction === 'PLAYER'
+      isPlayerFaction: b.faction === 'PLAYER',
+      hasRadar: b.defenseType === 'RADAR'
     }));
   }
 
@@ -189,50 +201,98 @@ export class BasesManager {
         }
       }
 
-      // Update Base Defense Turret logic
-      if (base.faction === 'PLAYER' && base.hasTurret) {
-        base.turretCooldown = (base.turretCooldown ?? 0) - dt;
+      // Update Base Defense Variety logic
+      // Maintain backwards compatibility: hasTurret maps to defenseType === 'TURRET'
+      if (base.faction === 'PLAYER') {
+        if (base.hasTurret && base.defenseType !== 'TURRET') {
+          base.defenseType = 'TURRET';
+        }
+        if (base.defenseType === undefined) {
+          base.defenseType = 'NONE';
+        }
+        base.hasTurret = base.defenseType === 'TURRET';
 
-        // Scan for closest hostile target in range
-        let targetEnemy: any = null;
-        let minDist = 280;
+        if (base.defenseType === 'TURRET') {
+          base.turretCooldown = (base.turretCooldown ?? 0) - dt;
 
-        enemies.forEach(e => {
-          if (!e.isFriendly && !e.isDead) {
-            const dx = e.x - base.x;
-            const dy = e.y - base.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < minDist) {
-              minDist = dist;
-              targetEnemy = e;
+          // Scan for closest hostile target in range
+          let targetEnemy: any = null;
+          let minDist = 280;
+
+          enemies.forEach(e => {
+            if (!e.isFriendly && !e.isDead) {
+              const dx = e.x - base.x;
+              const dy = e.y - base.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < minDist) {
+                minDist = dist;
+                targetEnemy = e;
+              }
+            }
+          });
+
+          if (targetEnemy) {
+            base.turretAngle = Math.atan2(targetEnemy.y - base.y, targetEnemy.x - base.x);
+            if (base.turretCooldown <= 0) {
+              base.turretCooldown = 850; // fire rate interval
+
+              projectilesManager.spawnBullet(
+                base.x,
+                base.y,
+                base.turretAngle,
+                11.5,
+                12, // turret laser damage
+                true, // friendly
+                '#39ff14',
+                4.0
+              );
+              sound.playLaser();
+            }
+          } else {
+            base.turretAngle = (base.turretAngle ?? 0) + 0.015 * (dt / 16.66);
+          }
+        } else if (base.defenseType === 'SHIELD') {
+          // Initialize shield stats if undefined
+          if (base.shieldHp === undefined) {
+            base.maxShieldHp = 200;
+            base.shieldHp = 200;
+            base.shieldRechargeTimer = 0;
+            base.shieldOfflineTimer = 0;
+          }
+
+          // If shield is offline (shorted out)
+          if (base.shieldOfflineTimer && base.shieldOfflineTimer > 0) {
+            base.shieldOfflineTimer -= dt;
+            if (base.shieldOfflineTimer <= 0) {
+              base.shieldHp = base.maxShieldHp;
+              // Spawn a nice glowing visual ring when coming back online
+              projectilesManager.spawnShockwave(base.x, base.y, 80, '#00f2fe', 600);
+            }
+          } else {
+            // Check if shield was depleted
+            if (base.shieldHp <= 0) {
+              base.shieldOfflineTimer = 10000; // 10 seconds offline cooldown
+              projectilesManager.spawnExplosionParticles(base.x, base.y, 30);
+            } else {
+              // Recharge shield if not hit recently
+              if (base.shieldRechargeTimer && base.shieldRechargeTimer > 0) {
+                base.shieldRechargeTimer -= dt;
+              } else {
+                // Recharge shield slowly (15 HP/sec)
+                base.shieldHp = Math.min(base.maxShieldHp ?? 200, (base.shieldHp ?? 0) + (15 * dt) / 1000);
+              }
             }
           }
-        });
-
-        if (targetEnemy) {
-          base.turretAngle = Math.atan2(targetEnemy.y - base.y, targetEnemy.x - base.x);
-          if (base.turretCooldown <= 0) {
-            base.turretCooldown = 850; // fire rate interval
-
-            projectilesManager.spawnBullet(
-              base.x,
-              base.y,
-              base.turretAngle,
-              11.5,
-              12, // turret laser damage
-              true, // friendly
-              '#39ff14',
-              4.0
-            );
-            sound.playLaser();
+        } else if (base.defenseType === 'RADAR') {
+          // Rotate radar scan sweep line
+          if (base.turretAngle === undefined) {
+            base.turretAngle = 0;
           }
-        } else {
-          base.turretAngle = (base.turretAngle ?? 0) + 0.015 * (dt / 16.66);
+          base.turretAngle = (base.turretAngle ?? 0) + 0.03 * (dt / 16.66);
         }
       } else {
-        if (base.faction !== 'PLAYER') {
-          base.hasTurret = false;
-        }
+        base.defenseType = 'NONE';
+        base.hasTurret = false;
       }
     });
 
@@ -271,32 +331,112 @@ export class BasesManager {
       const screenX = base.x - cameraX;
       const screenY = base.y - cameraY;
 
-      // Draw auto defense turret if constructed
-      if (base.faction === 'PLAYER' && base.hasTurret) {
+      // Draw defense systems
+      if (base.faction === 'PLAYER' && base.defenseType && base.defenseType !== 'NONE') {
         const angle = base.turretAngle ?? 0;
 
-        // Base plate ring
-        ctx.fillStyle = '#1e293b';
-        ctx.strokeStyle = '#00f2fe';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        if (base.defenseType === 'TURRET') {
+          // Base plate ring
+          ctx.fillStyle = '#1e293b';
+          ctx.strokeStyle = '#00f2fe';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
 
-        // Gun barrel
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 4.5;
-        ctx.beginPath();
-        ctx.moveTo(screenX, screenY);
-        ctx.lineTo(screenX + Math.cos(angle) * 23, screenY + Math.sin(angle) * 23);
-        ctx.stroke();
+          // Gun barrel
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 4.5;
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + Math.cos(angle) * 23, screenY + Math.sin(angle) * 23);
+          ctx.stroke();
 
-        // Turret glowing head cap
-        ctx.fillStyle = '#00f2fe';
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, 5.5, 0, Math.PI * 2);
-        ctx.fill();
+          // Turret glowing head cap
+          ctx.fillStyle = '#00f2fe';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (base.defenseType === 'SHIELD') {
+          // Base plate ring
+          ctx.fillStyle = '#1e293b';
+          ctx.strokeStyle = '#00f2fe';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Emitter head
+          ctx.fillStyle = (base.shieldOfflineTimer && base.shieldOfflineTimer > 0) ? '#ef4444' : '#00f2fe';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw the shield bubble if online
+          if (!base.shieldOfflineTimer || base.shieldOfflineTimer <= 0) {
+            const pulse = Math.sin(Date.now() / 150) * 2;
+            const shieldRadius = 80 + pulse;
+            const shieldHpRatio = (base.shieldHp ?? 200) / (base.maxShieldHp ?? 200);
+
+            ctx.strokeStyle = `rgba(0, 242, 254, ${0.3 + shieldHpRatio * 0.4})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, shieldRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = `rgba(0, 242, 254, ${0.03 + shieldHpRatio * 0.05})`;
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, shieldRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Text display of shield health inside bubble
+            ctx.fillStyle = '#00f2fe';
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`SHLD: ${Math.floor(base.shieldHp ?? 0)}`, screenX, screenY + 4);
+          } else {
+            // Draw warning offline indicator
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '8px "Share Tech Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`OFFLINE (${Math.ceil(base.shieldOfflineTimer / 1000)}s)`, screenX, screenY + 4);
+          }
+        } else if (base.defenseType === 'RADAR') {
+          // Draw base plate ring
+          ctx.fillStyle = '#1e293b';
+          ctx.strokeStyle = '#39ff14'; // green for radar
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Radar dish representation (arced lines)
+          ctx.strokeStyle = '#39ff14';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 10, angle - 0.5, angle + 0.5);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 15, angle - 0.3, angle + 0.3);
+          ctx.stroke();
+
+          // Draw radar scan sweep line on map if visible
+          ctx.strokeStyle = 'rgba(57, 255, 20, 0.15)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + Math.cos(angle) * 160, screenY + Math.sin(angle) * 160);
+          ctx.stroke();
+
+          // Weak scanning circle
+          ctx.strokeStyle = 'rgba(57, 255, 20, 0.05)';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 160, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // Color scheme according to faction

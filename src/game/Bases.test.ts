@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BasesManager } from './Bases';
 import { projectilesManager } from './Projectiles';
+import { GameMap } from './Map';
 
 vi.mock('./Sound', () => ({
   sound: {
@@ -144,5 +145,55 @@ describe('BasesManager & Capturing Logic', () => {
     // Verify a friendly bullet is spawned
     expect(projectilesManager.projectiles.length).toBe(1);
     expect(projectilesManager.projectiles[0].isPlayer).toBe(true);
+  });
+
+  it('should handle defense shield absorbing bullets and taking damage', () => {
+    const manager = new BasesManager();
+    const base = manager.bases[0];
+    base.faction = 'PLAYER';
+    base.defenseType = 'SHIELD';
+    base.shieldHp = 200;
+
+    manager.update(
+      16,
+      base.x + 500,
+      base.y + 500,
+      [],
+      () => {},
+      () => {}
+    );
+
+    expect(base.shieldHp).toBe(200);
+
+    // Spawn an enemy bullet hitting the shield (shield radius is 80px)
+    projectilesManager.projectiles = [];
+    projectilesManager.spawnBullet(
+      base.x + 40,
+      base.y + 40,
+      0,
+      0,
+      25,
+      false // enemy bullet
+    );
+
+    // Update projectiles
+    const map = new GameMap('FOREST');
+    projectilesManager.update(16, map, [], manager.bases);
+
+    // Bullet should be absorbed
+    expect(projectilesManager.projectiles.length).toBe(0);
+    expect(base.shieldHp).toBe(175); // 200 - 25
+  });
+
+  it('should double base vision multiplier if base has radar', () => {
+    const manager = new BasesManager();
+    const base = manager.bases[0];
+    base.faction = 'PLAYER';
+    base.defenseType = 'RADAR';
+
+    const positions = manager.getPositionsForFog();
+    const radarBase = positions.find(p => p.hasRadar);
+    expect(radarBase).toBeDefined();
+    expect(radarBase?.hasRadar).toBe(true);
   });
 });

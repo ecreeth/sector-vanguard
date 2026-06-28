@@ -517,9 +517,9 @@ export class GameMap {
     }
 
     // 3. Set tiles near captured player bases to visible (2)
-    const baseVisionRadius = 8;
     basePositions.forEach(base => {
       if (base.isPlayerFaction) {
+        const baseVisionRadius = base.hasRadar ? 16 : 8;
         const baseTileX = Math.floor(base.x / this.tileSize);
         const baseTileY = Math.floor(base.y / this.tileSize);
 

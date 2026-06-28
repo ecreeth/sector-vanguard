@@ -7,6 +7,7 @@ import type { GameState, EngineStateUpdate, WeaponType } from './game/Types';
 import { sound } from './game/Sound';
 import { basesManager } from './game/Bases';
 import { enemiesManager } from './game/Enemies';
+import { projectilesManager } from './game/Projectiles';
 import { Play, RotateCcw } from 'lucide-react';
 import './App.css';
 
@@ -61,15 +62,17 @@ function App() {
     }
   };
 
-  const handleBuildTurret = () => {
+  const handleBuildDefense = (defense: 'TURRET' | 'SHIELD' | 'RADAR') => {
     if (engineRef.current) {
       const player = engineRef.current.player;
-      if (player.credits >= 200) {
-        // Find the nearest player-owned base without a turret
+      const cost = defense === 'TURRET' ? 200 : (defense === 'SHIELD' ? 250 : 180);
+      
+      if (player.credits >= cost) {
+        // Find nearest player-owned base
         let bestBase: any = null;
         let bestDist = Infinity;
         basesManager.bases.forEach(b => {
-          if (b.faction === 'PLAYER' && !b.hasTurret) {
+          if (b.faction === 'PLAYER') {
             const dx = player.x - b.x;
             const dy = player.y - b.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -79,14 +82,36 @@ function App() {
             }
           }
         });
-        if (bestBase) {
-          player.credits -= 200;
-          bestBase.hasTurret = true;
+
+        // Only build if nearest base has a different defense type
+        if (bestBase && bestBase.defenseType !== defense) {
+          player.credits -= cost;
+          bestBase.defenseType = defense;
           bestBase.turretCooldown = 0;
           bestBase.turretAngle = 0;
+
+          if (defense === 'SHIELD') {
+            bestBase.maxShieldHp = 200;
+            bestBase.shieldHp = 200;
+            bestBase.shieldRechargeTimer = 0;
+            bestBase.shieldOfflineTimer = 0;
+          }
+
           sound.playPurchase();
         }
       }
+    }
+  };
+
+  const handleSetSquadOrder = (order: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY') => {
+    if (engineRef.current) {
+      enemiesManager.squadOrder = order;
+      sound.playOrderChange();
+      let color = '#00f2fe';
+      if (order === 'ESCORT') color = '#39ff14';
+      if (order === 'SEARCH_AND_DESTROY') color = '#f97316';
+      
+      projectilesManager.spawnText(engineRef.current.player.x, engineRef.current.player.y - 35, `SQUAD: ${order}`, color);
     }
   };
 
@@ -172,7 +197,8 @@ function App() {
           onPause={() => engineRef.current?.togglePause()}
           onQuit={handleQuit}
           onBuyUpgrade={handleBuyUpgrade}
-          onBuildTurret={handleBuildTurret}
+          onBuildDefense={handleBuildDefense}
+          onSetSquadOrder={handleSetSquadOrder}
           selectedBiome={selectedBiome}
           onDevAction={handleDevAction}
         />

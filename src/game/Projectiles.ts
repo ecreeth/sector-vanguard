@@ -177,7 +177,12 @@ export class ProjectilesManager {
     }
   }
 
-  update(dt: number, map: GameMap, collisionTargets: { x: number, y: number, radius: number, takeDamage: (dmg: number) => void, isPlayer: boolean }[]) {
+  update(
+    dt: number,
+    map: GameMap,
+    collisionTargets: { x: number; y: number; radius: number; takeDamage: (dmg: number) => void; isPlayer: boolean }[],
+    bases?: any[]
+  ) {
     // 1. Update Projectiles
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
@@ -265,6 +270,32 @@ export class ProjectilesManager {
           continue;
         } else {
           this.spawnSparks(proj.x, proj.y, proj.color, 6);
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+      }
+
+      // Check shield absorption for enemy bullets
+      if (!proj.isPlayer && bases) {
+        let hitShield = false;
+        for (const base of bases) {
+          if (base.faction === 'PLAYER' && base.defenseType === 'SHIELD' && (!base.shieldOfflineTimer || base.shieldOfflineTimer <= 0)) {
+            const dx = nextX - base.x;
+            const dy = nextY - base.y;
+            const distSq = dx*dx + dy*dy;
+            const shieldRadius = 80;
+            if (distSq < shieldRadius * shieldRadius) {
+              base.shieldHp = Math.max(0, (base.shieldHp ?? 200) - proj.damage);
+              base.shieldRechargeTimer = 4000; // 4 seconds delay
+              this.spawnSparks(proj.x, proj.y, '#00f2fe', 8);
+              this.spawnText(proj.x, proj.y - 12, 'ABSORBED', '#00f2fe');
+              hitShield = true;
+              sound.playHit();
+              break;
+            }
+          }
+        }
+        if (hitShield) {
           this.projectiles.splice(i, 1);
           continue;
         }

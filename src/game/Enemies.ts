@@ -290,6 +290,61 @@ export class Enemy {
     sound.playExplosion();
   }
 
+  getPatrolSteering(dt: number): { steerX: number; steerY: number } {
+    let steerX = 0;
+    let steerY = 0;
+
+    let assaultBase: { x: number; y: number; radius: number } | null = null;
+    let minBaseDist = Infinity;
+    basesManager.bases.forEach(b => {
+      if (b.faction === 'PLAYER') {
+        const bdx = b.x - this.x;
+        const bdy = b.y - this.y;
+        const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+        if (bdist < minBaseDist) {
+          minBaseDist = bdist;
+          assaultBase = b;
+        }
+      }
+    });
+
+    if (assaultBase) {
+      const base: { x: number; y: number; radius: number } = assaultBase;
+      const bdx = base.x - this.x;
+      const bdy = base.y - this.y;
+      const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+      if (bdist > base.radius - 30) {
+        steerX = bdx / bdist;
+        steerY = bdy / bdist;
+      } else {
+        this.patrolAngle += 0.01 * (dt / 16.66);
+        const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
+        const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
+        const tdx = targetX - this.x;
+        const tdy = targetY - this.y;
+        const tDist = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (tDist > 8) {
+          steerX = tdx / tDist;
+          steerY = tdy / tDist;
+        }
+      }
+    } else {
+      // Standard patrol wandering
+      this.patrolAngle += 0.015 * (dt / 16.66);
+      const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
+      const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
+      const pdx = targetPatrolX - this.x;
+      const pdy = targetPatrolY - this.y;
+      const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+      if (pdist > 10) {
+        steerX = pdx / pdist;
+        steerY = pdy / pdist;
+      }
+    }
+
+    return { steerX, steerY };
+  }
+
   update(
     dt: number,
     map: GameMap,
@@ -463,75 +518,110 @@ export class Enemy {
           steerY = dy / dist;
         }
       } else if (this.isFriendly && this.type === 'DEFENDER') {
-        // Escort player if close and player is alive
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 250 && !player.isDead) {
-          if (player.isMoving === false && this.assignedOrbitAngle !== undefined) {
-            // Circle around player to protect them using assigned orbit slot
-            const circleRadius = (this as any).assignedCircleRadius || 55;
-            const targetX = player.x + Math.cos(this.assignedOrbitAngle) * circleRadius;
-            const targetY = player.y + Math.sin(this.assignedOrbitAngle) * circleRadius;
-            const tdx = targetX - this.x;
-            const tdy = targetY - this.y;
-            const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
-            if (tDist > 4) {
-              steerX = tdx / tDist;
-              steerY = tdy / tDist;
+        const order = enemiesManager.squadOrder;
+
+        if (order === 'ESCORT') {
+          // Escort player: seek player from anywhere on the map!
+          const dx = player.x - this.x;
+          const dy = player.y - this.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+
+          if (dist < 250 && !player.isDead) {
+            if (player.isMoving === false && this.assignedOrbitAngle !== undefined) {
+              // Circle around player to protect them using assigned orbit slot
+              const circleRadius = (this as any).assignedCircleRadius || 55;
+              const targetX = player.x + Math.cos(this.assignedOrbitAngle) * circleRadius;
+              const targetY = player.y + Math.sin(this.assignedOrbitAngle) * circleRadius;
+              const tdx = targetX - this.x;
+              const tdy = targetY - this.y;
+              const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
+              if (tDist > 4) {
+                steerX = tdx / tDist;
+                steerY = tdy / tDist;
+              }
+            } else if (dist > 60) {
+              steerX = dx / dist;
+              steerY = dy / dist;
             }
-          } else if (dist > 60) {
+          } else if (!player.isDead) {
+            // Seek player from far away
             steerX = dx / dist;
             steerY = dy / dist;
           }
-        } else {
-          // Default to patrol around base
-          let assaultBase: { x: number, y: number, radius: number } | null = null;
-          let minBaseDist = Infinity;
+        } else if (order === 'SEARCH_AND_DESTROY') {
+          // Search and Destroy: march towards nearest hostile base, portal, or active enemy unit
+          let targetDest: { x: number; y: number } | null = null;
+          let minDist = Infinity;
+
+          // 1. Search for hostile/neutral bases
           basesManager.bases.forEach(b => {
-            if (b.faction === 'PLAYER') {
-              const bdx = b.x - this.x;
-              const bdy = b.y - this.y;
-              const bdist = Math.sqrt(bdx*bdx + bdy*bdy);
-              if (bdist < minBaseDist) {
-                minBaseDist = bdist;
-                assaultBase = b;
+            if (b.faction !== 'PLAYER') {
+              const dx = b.x - this.x;
+              const dy = b.y - this.y;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              if (dist < minDist) {
+                minDist = dist;
+                targetDest = b;
               }
             }
           });
 
-          if (assaultBase) {
-            const base: { x: number, y: number, radius: number } = assaultBase;
-            const bdx = base.x - this.x;
-            const bdy = base.y - this.y;
-            const bdist = Math.sqrt(bdx*bdx + bdy*bdy);
-            if (bdist > base.radius - 30) {
-              steerX = bdx / bdist;
-              steerY = bdy / bdist;
-            } else {
-              this.patrolAngle += 0.01 * (dt / 16.66);
-              const targetX = base.x + Math.cos(this.patrolAngle) * (base.radius * 0.45);
-              const targetY = base.y + Math.sin(this.patrolAngle) * (base.radius * 0.45);
+          // 2. Search for hostile enemies on the map
+          if (!targetDest) {
+            otherEnemies.forEach(other => {
+              if (!other.isFriendly && !other.isDead && other.type !== 'DECOY') {
+                const dx = other.x - this.x;
+                const dy = other.y - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < minDist) {
+                  minDist = dist;
+                  targetDest = other;
+                }
+              }
+            });
+          }
+
+          if (targetDest) {
+            const dest: { x: number; y: number } = targetDest;
+            const dx = dest.x - this.x;
+            const dy = dest.y - this.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 30) {
+              steerX = dx / dist;
+              steerY = dy / dist;
+            }
+          } else {
+            // No targets left! Fallback to patrolling closest player base
+            const patrol = this.getPatrolSteering(dt);
+            steerX = patrol.steerX;
+            steerY = patrol.steerY;
+          }
+        } else {
+          // DEFEND order: escort if close, otherwise patrol base
+          const dx = player.x - this.x;
+          const dy = player.y - this.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          
+          if (dist < 250 && !player.isDead) {
+            if (player.isMoving === false && this.assignedOrbitAngle !== undefined) {
+              const circleRadius = (this as any).assignedCircleRadius || 55;
+              const targetX = player.x + Math.cos(this.assignedOrbitAngle) * circleRadius;
+              const targetY = player.y + Math.sin(this.assignedOrbitAngle) * circleRadius;
               const tdx = targetX - this.x;
               const tdy = targetY - this.y;
               const tDist = Math.sqrt(tdx*tdx + tdy*tdy);
-              if (tDist > 8) {
+              if (tDist > 4) {
                 steerX = tdx / tDist;
                 steerY = tdy / tDist;
               }
+            } else if (dist > 60) {
+              steerX = dx / dist;
+              steerY = dy / dist;
             }
           } else {
-            // Standard patrol wandering
-            this.patrolAngle += 0.015 * (dt / 16.66);
-            const targetPatrolX = this.patrolX + Math.cos(this.patrolAngle) * this.patrolRadius;
-            const targetPatrolY = this.patrolY + Math.sin(this.patrolAngle) * this.patrolRadius;
-            const pdx = targetPatrolX - this.x;
-            const pdy = targetPatrolY - this.y;
-            const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
-            if (pdist > 10) {
-              steerX = pdx / pdist;
-              steerY = pdy / pdist;
-            }
+            const patrol = this.getPatrolSteering(dt);
+            steerX = patrol.steerX;
+            steerY = patrol.steerY;
           }
         }
       } else {
@@ -1012,6 +1102,47 @@ export class Enemy {
         ctx.beginPath();
         ctx.arc(screenX + Math.cos(walkAngle) * (this.radius - 4), screenY + Math.sin(walkAngle) * (this.radius - 4), 3, 0, Math.PI * 2);
         ctx.fill();
+
+        // Draw squad order indicator under/around the defender
+        const order = enemiesManager.squadOrder;
+        ctx.save();
+        if (order === 'DEFEND') {
+          // Draw a small blue/cyan dotted halo
+          ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([2, 2]);
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, this.radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (order === 'ESCORT') {
+          // Draw a green pulsing orbit halo
+          const pulse = Math.sin(Date.now() / 150) * 1.5;
+          ctx.strokeStyle = `rgba(57, 255, 20, ${0.45 + Math.sin(Date.now() / 120) * 0.15})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, this.radius + 4 + pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (order === 'SEARCH_AND_DESTROY') {
+          // Draw a small orange crosshair outline
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.55)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, this.radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Crosshair ticks
+          ctx.beginPath();
+          ctx.moveTo(screenX - (this.radius + 7), screenY);
+          ctx.lineTo(screenX - (this.radius + 3), screenY);
+          ctx.moveTo(screenX + (this.radius + 3), screenY);
+          ctx.lineTo(screenX + (this.radius + 7), screenY);
+          ctx.moveTo(screenX, screenY - (this.radius + 7));
+          ctx.lineTo(screenX, screenY - (this.radius + 3));
+          ctx.moveTo(screenX, screenY + (this.radius + 3));
+          ctx.lineTo(screenX, screenY + (this.radius + 7));
+          ctx.stroke();
+        }
+        ctx.restore();
         break;
 
       case 'SUICIDE':
@@ -1242,6 +1373,18 @@ export class EnemiesManager {
   spawnTimer: number = 0;
   playerRef: any = null;
   defenderOrbitAngle: number = 0;
+  squadOrder: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY' = 'DEFEND';
+
+  cycleSquadOrder() {
+    if (this.squadOrder === 'DEFEND') {
+      this.squadOrder = 'ESCORT';
+    } else if (this.squadOrder === 'ESCORT') {
+      this.squadOrder = 'SEARCH_AND_DESTROY';
+    } else {
+      this.squadOrder = 'DEFEND';
+    }
+    return this.squadOrder;
+  }
 
   constructor() {
     this.reset();
@@ -1252,6 +1395,7 @@ export class EnemiesManager {
     this.spawnTimer = 0;
     this.playerRef = null;
     this.defenderOrbitAngle = 0;
+    this.squadOrder = 'DEFEND';
     
     // Spawn initial guards around bases
     // Base Alpha (ENEMY, 2048, 512): Spawn turrets and drones
@@ -1300,7 +1444,7 @@ export class EnemiesManager {
 
     // If the player is alive and stopped, assign distributed orbit slots to nearby friendly defenders
     if (player && !player.isDead && player.isMoving === false) {
-      this.defenderOrbitAngle += 0.02 * (dt / 16.66);
+      // Keep defenderOrbitAngle static when player is stopped so defenders stand still in their slots once they arrive
       
       const orbitingDefenders = this.enemies.filter(e => 
         e.isFriendly && 
