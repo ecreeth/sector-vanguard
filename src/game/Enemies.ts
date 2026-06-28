@@ -80,9 +80,9 @@ export class Enemy {
         this.hp = 35;
         this.maxHp = 35;
         this.speed = 2.2;
-        this.shootDelay = 800; // 0.8 seconds
+        this.shootDelay = 1400;
         this.damage = 8;
-        this.visionRange = 350;
+        this.visionRange = 300;
         break;
       case 'TURRET':
         this.radius = 20;
