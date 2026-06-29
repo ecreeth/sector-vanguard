@@ -2,7 +2,7 @@
 
 export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'TRANSITION';
 
-export type WeaponType = 'PISTOL' | 'SHOTGUN' | 'PLASMA_RIFLE';
+export type WeaponType = 'PISTOL' | 'SHOTGUN' | 'PLASMA_RIFLE' | 'ROCKET_LAUNCHER' | 'ARC_SNIPER';
 
 export type BossVariant = 'FOREST' | 'WASTELAND' | 'TUNDRA' | 'CYBER';
 

@@ -35,7 +35,7 @@ export class Player {
     SHOTGUN: {
       type: 'SHOTGUN',
       name: 'Scatter Shotgun',
-      damage: 10, // per pellet (fires 5 pellets)
+      damage: 10,
       fireRate: 650,
       ammo: 16,
       maxAmmo: 32,
@@ -51,6 +51,26 @@ export class Player {
       maxAmmo: 120,
       unlocked: false,
       cost: 300
+    },
+    ROCKET_LAUNCHER: {
+      type: 'ROCKET_LAUNCHER',
+      name: 'Rocket Launcher',
+      damage: 60,
+      fireRate: 1200,
+      ammo: 12,
+      maxAmmo: 20,
+      unlocked: false,
+      cost: 400
+    },
+    ARC_SNIPER: {
+      type: 'ARC_SNIPER',
+      name: 'Arc Sniper',
+      damage: 45,
+      fireRate: 900,
+      ammo: 20,
+      maxAmmo: 40,
+      unlocked: false,
+      cost: 350
     }
   };
 
@@ -180,15 +200,15 @@ export class Player {
   // Cycle through unlocked weapons
   cycleWeapon() {
     if (this.isDead) return;
-    const types: WeaponType[] = ['PISTOL', 'SHOTGUN', 'PLASMA_RIFLE'];
+    const types: WeaponType[] = ['PISTOL', 'SHOTGUN', 'PLASMA_RIFLE', 'ROCKET_LAUNCHER', 'ARC_SNIPER'];
     let idx = types.indexOf(this.currentWeaponType);
     
     // Find next unlocked weapon
-    for (let i = 1; i <= 3; i++) {
-      const nextIdx = (idx + i) % 3;
+    for (let i = 1; i <= 5; i++) {
+      const nextIdx = (idx + i) % 5;
       if (this.weapons[types[nextIdx]].unlocked) {
         this.currentWeaponType = types[nextIdx];
-        sound.playPurchase(); // play weapon equip sound
+        sound.playPurchase();
         break;
       }
     }
@@ -231,6 +251,13 @@ export class Player {
     if (this.airstrikeCooldown > 0) this.airstrikeCooldown = Math.max(0, this.airstrikeCooldown - dt);
     if (this.droneCooldown > 0) this.droneCooldown = Math.max(0, this.droneCooldown - dt);
     if (this.decoyCooldown > 0) this.decoyCooldown = Math.max(0, this.decoyCooldown - dt);
+
+    // Process pending upgrade token from boss loot
+    const pendingUpgrade = (this as any).pendingUpgradeToken;
+    if (pendingUpgrade) {
+      (this as any).pendingUpgradeToken = null;
+      this.buyUpgrade(pendingUpgrade);
+    }
 
     // Screen shake decay
     if (this.screenShake > 0) {

@@ -294,7 +294,10 @@ export class Enemy {
 
       // Spawn loot drops for hostile deaths
       if (!this.isFriendly && this.type !== 'DECOY') {
-        if (Math.random() < 0.5) {
+        if (this.type === 'BOSS') {
+          // Boss always drops special loot
+          lootManager.spawnBossLoot(this.x, this.y);
+        } else if (Math.random() < 0.5) {
           lootManager.spawnDrop(this.x, this.y);
         }
       }

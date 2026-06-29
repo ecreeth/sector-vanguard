@@ -23,7 +23,7 @@ interface HUDProps {
   onBuildDefense: (defense: 'TURRET' | 'SHIELD' | 'RADAR') => void;
   onSetSquadOrder: (order: 'DEFEND' | 'ESCORT' | 'SEARCH_AND_DESTROY') => void;
   selectedBiome?: string;
-  onDevAction?: (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn', data?: any) => void;
+  onDevAction?: (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn' | 'unlock_weapons' | 'refill_ammo', data?: any) => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -498,7 +498,7 @@ export const HUD: React.FC<HUDProps> = ({
           <div style={hudStyles.shopArea}>
             <div style={hudStyles.shopTitle}>ARMORY ACQUISITIONS</div>
             
-            {(['SHOTGUN', 'PLASMA_RIFLE'] as WeaponType[]).map(wType => {
+            {(['SHOTGUN', 'PLASMA_RIFLE', 'ROCKET_LAUNCHER', 'ARC_SNIPER'] as WeaponType[]).map(wType => {
               const wep = weapons[wType];
               const cost = wep.unlocked ? Math.floor(wep.cost * 0.15) : wep.cost;
               const canAfford = credits >= cost;
@@ -586,6 +586,28 @@ export const HUD: React.FC<HUDProps> = ({
                 style={{ ...hudStyles.devBtn, color: 'var(--neon-red)', borderColor: 'var(--neon-red)' }}
               >
                 WIPE ENEMIES
+              </button>
+            </div>
+
+            {/* Unlock All Weapons */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>ARMORY ACCESS</span>
+              <button
+                onClick={() => onDevAction('unlock_weapons')}
+                style={{ ...hudStyles.devBtn, color: 'var(--neon-yellow)', borderColor: 'var(--neon-yellow)' }}
+              >
+                UNLOCK ALL
+              </button>
+            </div>
+
+            {/* Refill All Ammo */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>AMMO RESUPPLY</span>
+              <button
+                onClick={() => onDevAction('refill_ammo')}
+                style={{ ...hudStyles.devBtn, color: '#00f2fe', borderColor: '#00f2fe' }}
+              >
+                REFILL ALL
               </button>
             </div>
           </div>

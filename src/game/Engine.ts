@@ -384,6 +384,24 @@ export class GameEngine {
               this.player.pierceLvl,
               this.player.plasmaBurnLvl
             );
+          } else if (this.player.currentWeaponType === 'ROCKET_LAUNCHER') {
+            projectilesManager.spawnRocket(
+              bulletSpawnX,
+              bulletSpawnY,
+              this.player.angle,
+              weapon.damage,
+              true,
+              70
+            );
+          } else if (this.player.currentWeaponType === 'ARC_SNIPER') {
+            projectilesManager.spawnBeam(
+              bulletSpawnX,
+              bulletSpawnY,
+              this.player.angle,
+              weapon.damage,
+              true,
+              600
+            );
           } else {
             // Laser Pistol
             projectilesManager.spawnBullet(

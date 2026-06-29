@@ -15,6 +15,8 @@ export interface Projectile {
   pierceLeft?: number;
   plasmaBurnLvl?: number;
   hitTargets?: any[];
+  splashRadius?: number;
+  isBeam?: boolean;
 }
 
 export interface Particle {
@@ -96,13 +98,66 @@ export class ProjectilesManager {
     plasmaBurnLvl: number = 0
   ) {
     const pelletsCount = 5;
-    const spreadAngle = 0.25; // spread range in radians (~15 degrees)
+    const spreadAngle = 0.25;
     
     for (let i = 0; i < pelletsCount; i++) {
-      // Linear interpolation of spread angles
       const offset = (i - (pelletsCount - 1) / 2) * (spreadAngle / (pelletsCount - 1));
-      const speed = 12 + Math.random() * 4; // slight speed variation
+      const speed = 12 + Math.random() * 4;
       this.spawnBullet(x, y, angle + offset, speed, damage, isPlayer, '#ffe600', 3.5, bouncesLeft, pierceLeft, plasmaBurnLvl);
+    }
+  }
+
+  spawnRocket(
+    x: number,
+    y: number,
+    angle: number,
+    damage: number,
+    isPlayer: boolean,
+    splashRadius: number = 70
+  ) {
+    this.projectiles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * 8,
+      vy: Math.sin(angle) * 8,
+      damage,
+      isPlayer,
+      radius: 6,
+      color: '#ff5500',
+      life: 2500,
+      splashRadius,
+      hitTargets: []
+    });
+  }
+
+  spawnBeam(
+    x: number,
+    y: number,
+    angle: number,
+    damage: number,
+    isPlayer: boolean,
+    range: number = 600
+  ) {
+    const endX = x + Math.cos(angle) * range;
+    const endY = y + Math.sin(angle) * range;
+    const steps = 20;
+    const stepX = (endX - x) / steps;
+    const stepY = (endY - y) / steps;
+
+    for (let s = 0; s < steps; s++) {
+      this.projectiles.push({
+        x: x + stepX * s,
+        y: y + stepY * s,
+        vx: Math.cos(angle) * 30,
+        vy: Math.sin(angle) * 30,
+        damage: Math.round(damage * (1 - s * 0.03)),
+        isPlayer,
+        radius: 3,
+        color: '#c084fc',
+        life: 150 + s * 5,
+        pierceLeft: 10,
+        hitTargets: []
+      });
     }
   }
 
@@ -333,6 +388,28 @@ export class ProjectilesManager {
 
             target.takeDamage(proj.damage);
             this.spawnSparks(proj.x, proj.y, proj.isPlayer ? '#ffe600' : '#ff0055', 8);
+
+            // Splash damage for rockets
+            if (proj.splashRadius && proj.splashRadius > 0) {
+              this.spawnShockwave(proj.x, proj.y, proj.splashRadius, '#ff5500', 400);
+              this.spawnExplosionParticles(proj.x, proj.y, proj.splashRadius * 0.5);
+              sound.playExplosion();
+              for (const splashTarget of collisionTargets) {
+                if (splashTarget === target) continue;
+                if (proj.isPlayer === splashTarget.isPlayer) continue;
+                const sdx = proj.x - splashTarget.x;
+                const sdy = proj.y - splashTarget.y;
+                const sDistSq = sdx * sdx + sdy * sdy;
+                if (sDistSq < proj.splashRadius * proj.splashRadius) {
+                  const falloff = 1 - Math.sqrt(sDistSq) / proj.splashRadius;
+                  const splashDmg = Math.round(proj.damage * falloff * 0.6);
+                  if (splashDmg > 0) {
+                    splashTarget.takeDamage(splashDmg);
+                    this.spawnText(splashTarget.x, splashTarget.y - 12, `-${splashDmg}`, '#ff5500');
+                  }
+                }
+              }
+            }
 
             // Floating text display
             this.spawnText(target.x, target.y - 12, `-${proj.damage}`, proj.isPlayer ? '#ffe600' : '#ff3355');

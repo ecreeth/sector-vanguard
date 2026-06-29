@@ -130,7 +130,7 @@ function App() {
     }
   };
 
-  const handleDevAction = (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn', data?: any) => {
+  const handleDevAction = (action: 'god' | 'credits' | 'clear' | 'capture' | 'spawn' | 'unlock_weapons' | 'refill_ammo', data?: any) => {
     if (engineRef.current) {
       const engine = engineRef.current;
       if (action === 'god') {
@@ -143,6 +143,17 @@ function App() {
         basesManager.bases.forEach(b => {
           b.faction = 'PLAYER';
           b.progress = 100;
+        });
+      } else if (action === 'unlock_weapons') {
+        engine.player.weapons.SHOTGUN.unlocked = true;
+        engine.player.weapons.PLASMA_RIFLE.unlocked = true;
+        engine.player.weapons.ROCKET_LAUNCHER.unlocked = true;
+        engine.player.weapons.ARC_SNIPER.unlocked = true;
+      } else if (action === 'refill_ammo') {
+        Object.values(engine.player.weapons).forEach(w => {
+          if (w.ammo !== Infinity) {
+            w.ammo = w.maxAmmo;
+          }
         });
       } else if (action === 'spawn' && data) {
         // Spawn at a random position, not too close to player (between 200px and 450px)
