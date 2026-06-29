@@ -319,7 +319,7 @@ export class Enemy {
 
     let assaultBase: { x: number; y: number; radius: number } | null = null;
     let minBaseDist = Infinity;
-    basesManager.bases.forEach(b => {
+    for (const b of basesManager.bases) {
       if (b.faction === 'PLAYER') {
         const bdx = b.x - this.x;
         const bdy = b.y - this.y;
@@ -329,7 +329,7 @@ export class Enemy {
           assaultBase = b;
         }
       }
-    });
+    }
 
     if (assaultBase) {
       const base: { x: number; y: number; radius: number } = assaultBase;
@@ -446,7 +446,7 @@ export class Enemy {
       let closestHostile: Enemy | null = null;
       let minDist = this.visionRange;
 
-      otherEnemies.forEach(e => {
+      for (const e of otherEnemies) {
         if (!e.isFriendly && !e.isDead) {
           const dx = e.x - this.x;
           const dy = e.y - this.y;
@@ -456,7 +456,7 @@ export class Enemy {
             closestHostile = e;
           }
         }
-      });
+      }
 
       if (closestHostile) {
         this.targetUnit = closestHostile;
@@ -482,7 +482,7 @@ export class Enemy {
           let closestDefender: Enemy | null = null;
           let minDefDist = this.visionRange;
 
-          otherEnemies.forEach(e => {
+          for (const e of otherEnemies) {
             if (e.isFriendly && !e.isDead) {
               const dxMeDef = e.x - this.x;
               const dyMeDef = e.y - this.y;
@@ -492,7 +492,7 @@ export class Enemy {
                 closestDefender = e;
               }
             }
-          });
+          }
 
           if (closestDefender) {
             this.targetUnit = closestDefender;
@@ -505,7 +505,7 @@ export class Enemy {
         let closestDefender: Enemy | null = null;
         let minDist = (distToPlayer < this.visionRange || (this.alertedTimer > 0 && distToPlayer < this.visionRange * 2)) ? distToPlayer : this.visionRange;
 
-        otherEnemies.forEach(e => {
+        for (const e of otherEnemies) {
           if (e.isFriendly && !e.isDead) {
             const dx = e.x - this.x;
             const dy = e.y - this.y;
@@ -515,7 +515,7 @@ export class Enemy {
               closestDefender = e;
             }
           }
-        });
+        }
 
         if (closestDefender) {
           this.targetUnit = closestDefender;
@@ -535,7 +535,7 @@ export class Enemy {
         let bestAlly: Enemy | null = null;
         let minAllyDist = 350;
         
-        otherEnemies.forEach(e => {
+        for (const e of otherEnemies) {
           if (!e.isFriendly && !e.isDead && e !== this && (e.type === 'SNIPER' || e.type === 'PORTAL' || e.type === 'MECH')) {
             const adx = e.x - this.x;
             const ady = e.y - this.y;
@@ -545,7 +545,7 @@ export class Enemy {
               bestAlly = e;
             }
           }
-        });
+        }
         
         if (bestAlly) {
           const pdx = player.x - bestAlly.x;
