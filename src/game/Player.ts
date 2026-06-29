@@ -1,5 +1,6 @@
 import type { Weapon, WeaponType, PlayerStats } from './Types';
 import type { GameMap } from './Map';
+import { BOSS_NAMES } from './Types';
 import { sound } from './Sound';
 import { enemiesManager, Enemy } from './Enemies';
 import { projectilesManager } from './Projectiles';
@@ -382,6 +383,8 @@ export class Player {
       bossActive: !!boss,
       bossHp: boss ? Math.ceil(boss.hp) : 0,
       bossMaxHp: boss ? boss.maxHp : 0,
+      bossName: boss ? BOSS_NAMES[boss.bossVariant] : 'SECTOR OVERSEER',
+      bossVariant: boss ? boss.bossVariant : 'FOREST',
       godMode: this.godMode,
       squadOrder: enemiesManager.squadOrder,
       activeDefendersCount: enemiesManager.enemies.filter(e => e.isFriendly && e.type === 'DEFENDER' && !e.isDead).length,

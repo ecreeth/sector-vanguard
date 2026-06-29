@@ -428,7 +428,7 @@ export const HUD: React.FC<HUDProps> = ({
               color: '#ef4444',
               textShadow: '0 0 8px rgba(239, 68, 68, 0.5)'
             }}>
-              ⚠ SECTOR OVERSEER
+              ⚠ {stats.bossName}
             </span>
           </div>
           <div style={{
@@ -596,13 +596,41 @@ export const HUD: React.FC<HUDProps> = ({
               INSTANT UNIT MATERIALIZER
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-              {(['DRONE', 'SUICIDE', 'SHIELD_MECH', 'SNIPER', 'MECH', 'TURRET', 'PORTAL', 'BOSS', 'DEFENDER'] as const).map(eType => (
+              {(['DRONE', 'SUICIDE', 'SHIELD_MECH', 'SNIPER', 'MECH', 'TURRET', 'PORTAL', 'DEFENDER'] as const).map(eType => (
                 <button
                   key={eType}
                   onClick={() => onDevAction('spawn', eType)}
                   style={{ ...hudStyles.devBtn, fontSize: '9px', padding: '3px 0', textAlign: 'center', width: '100%' }}
                 >
                   + {eType.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+            {/* Biome Boss Variant Spawners */}
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--neon-red)', marginTop: 8, marginBottom: 6 }}>
+              BIOME BOSS DEPLOY
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              {([
+                { variant: 'FOREST', label: 'ANCIENT COLOSSUS', color: '#22c55e' },
+                { variant: 'WASTELAND', label: 'TOXIC BEHEMOTH', color: '#a3e635' },
+                { variant: 'TUNDRA', label: 'CRYO TITAN', color: '#38bdf8' },
+                { variant: 'CYBER', label: 'NEXUS PRIME', color: '#c084fc' }
+              ] as const).map(boss => (
+                <button
+                  key={boss.variant}
+                  onClick={() => onDevAction('spawn', { type: 'BOSS', variant: boss.variant })}
+                  style={{
+                    ...hudStyles.devBtn,
+                    fontSize: '8px',
+                    padding: '4px 0',
+                    textAlign: 'center',
+                    width: '100%',
+                    color: boss.color,
+                    borderColor: boss.color
+                  }}
+                >
+                  + {boss.label}
                 </button>
               ))}
             </div>

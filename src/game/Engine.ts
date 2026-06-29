@@ -1,4 +1,4 @@
-import type { GameState, EngineStateUpdate, CampaignProgress } from './Types';
+import type { GameState, EngineStateUpdate, CampaignProgress, BossVariant } from './Types';
 import { CAMPAIGN_STAGES_PER_SECTOR, BIOME_ORDER } from './Types';
 import { GameMap } from './Map';
 import { Player } from './Player';
@@ -524,10 +524,11 @@ export class GameEngine {
             sound.playCaptureComplete();
           }
         } else {
-          // Stage 5: Spawn final Sector Overseer Boss
+          // Stage 5: Spawn biome-specific boss
           if (!this.bossSpawned) {
             this.bossSpawned = true;
-            enemiesManager.spawnEnemy(1280, 1280, 'BOSS');
+            const bossVariant = this.selectedBiome as BossVariant;
+            enemiesManager.spawnEnemy(1280, 1280, 'BOSS', false, bossVariant);
             sound.playShieldRegen();
           } else {
             const bossDead = !enemiesManager.enemies.some(e => e.type === 'BOSS' && !e.isDead);

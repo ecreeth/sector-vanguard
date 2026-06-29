@@ -4,6 +4,15 @@ export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' |
 
 export type WeaponType = 'PISTOL' | 'SHOTGUN' | 'PLASMA_RIFLE';
 
+export type BossVariant = 'FOREST' | 'WASTELAND' | 'TUNDRA' | 'CYBER';
+
+export const BOSS_NAMES: Record<BossVariant, string> = {
+  FOREST: 'ANCIENT COLOSSUS',
+  WASTELAND: 'TOXIC BEHEMOTH',
+  TUNDRA: 'CRYO TITAN',
+  CYBER: 'NEXUS PRIME'
+};
+
 export interface Weapon {
   type: WeaponType;
   name: string;
@@ -73,6 +82,8 @@ export interface PlayerStats {
   bossActive: boolean;
   bossHp: number;
   bossMaxHp: number;
+  bossName: string;
+  bossVariant: BossVariant;
   godMode: boolean;
   squadOrder?: SquadOrder;
   activeDefendersCount?: number;

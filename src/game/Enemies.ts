@@ -1,4 +1,5 @@
 import type { GameMap } from './Map';
+import type { BossVariant } from './Types';
 import { projectilesManager } from './Projectiles';
 import { sound } from './Sound';
 import { basesManager } from './Bases';
@@ -36,6 +37,8 @@ export class Enemy {
   // Stun states and Boss triggers
   stunTimer: number = 0;
   bossSpawnsDone: Record<number, boolean> = { 600: false, 400: false, 200: false };
+  bossVariant: BossVariant = 'FOREST';
+  bossPhaseAbilitiesDone: Record<number, boolean> = {};
 
   // New expansion states
   life: number = 0; // lifespan for temporary entities (Decoy)
@@ -58,27 +61,37 @@ export class Enemy {
     this.plasmaBurnTimer = 500; // every 500ms
   }
 
-  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean, isGuard: boolean = false, difficultyScale: number = 1.0, campaignStage: number = 1) {
+  constructor(x: number, y: number, type: EnemyType, isFriendly: boolean, isGuard: boolean = false, difficultyScale: number = 1.0, campaignStage: number = 1, variant: BossVariant = 'FOREST') {
     this.x = x;
     this.y = y;
     this.type = type;
     this.isFriendly = isFriendly;
     this.isGuard = isGuard;
+    this.bossVariant = variant;
     
     // Set properties based on unit type
     this.patrolX = x;
     this.patrolY = y;
 
     switch (type) {
-      case 'BOSS':
-        this.radius = 35;
-        this.hp = 800;
-        this.maxHp = 800;
-        this.speed = 1.2;
-        this.shootDelay = 1800; // rings of fire
-        this.damage = 10;
-        this.visionRange = 550;
+      case 'BOSS': {
+        // Variant-specific boss stats
+        const variantStats: Record<BossVariant, { hp: number; radius: number; speed: number; shootDelay: number; damage: number; visionRange: number }> = {
+          FOREST:     { hp: 900,  radius: 38, speed: 1.0, shootDelay: 2000, damage: 10, visionRange: 550 },
+          WASTELAND:  { hp: 1000, radius: 40, speed: 1.3, shootDelay: 1600, damage: 12, visionRange: 550 },
+          TUNDRA:     { hp: 850,  radius: 36, speed: 1.1, shootDelay: 1800, damage: 10, visionRange: 550 },
+          CYBER:      { hp: 1100, radius: 42, speed: 0.9, shootDelay: 1500, damage: 14, visionRange: 600 }
+        };
+        const vs = variantStats[variant];
+        this.radius = vs.radius;
+        this.hp = vs.hp;
+        this.maxHp = vs.hp;
+        this.speed = vs.speed;
+        this.shootDelay = vs.shootDelay;
+        this.damage = vs.damage;
+        this.visionRange = vs.visionRange;
         break;
+      }
       case 'DRONE':
         this.radius = 15;
         this.hp = 35;
@@ -207,10 +220,13 @@ export class Enemy {
       }
     }
 
-    // Boss shield mechanic: absorbs 60% of damage when below 50% HP (400 HP)
-    if (this.type === 'BOSS' && this.hp < 400) {
-      amount = amount * 0.4;
-      projectilesManager.spawnSparks(this.x, this.y, '#00f2fe', 6);
+    // Boss shield mechanic: absorbs 60% of damage when below 50% HP
+    if (this.type === 'BOSS') {
+      const halfHp = this.maxHp / 2;
+      if (this.hp < halfHp) {
+        amount = amount * 0.4;
+        projectilesManager.spawnSparks(this.x, this.y, '#00f2fe', 6);
+      }
     }
 
     this.hp = Math.max(0, this.hp - amount);
@@ -230,26 +246,44 @@ export class Enemy {
       });
     }
 
-    // Trigger Boss Drone waves
+    // Trigger Boss phase abilities based on HP thresholds
     if (this.type === 'BOSS' && !this.isDead) {
-      if (this.hp <= 600 && !this.bossSpawnsDone[600]) {
-        this.bossSpawnsDone[600] = true;
-        enemiesManager.spawnEnemy(this.x - 50, this.y - 30, 'DRONE');
-        enemiesManager.spawnEnemy(this.x + 50, this.y + 30, 'DRONE');
-        sound.playShieldRegen();
-      }
-      if (this.hp <= 400 && !this.bossSpawnsDone[400]) {
-        this.bossSpawnsDone[400] = true;
-        enemiesManager.spawnEnemy(this.x - 60, this.y, 'DRONE');
-        enemiesManager.spawnEnemy(this.x + 60, this.y, 'DRONE');
-        sound.playShieldRegen();
-      }
-      if (this.hp <= 200 && !this.bossSpawnsDone[200]) {
-        this.bossSpawnsDone[200] = true;
-        enemiesManager.spawnEnemy(this.x - 60, this.y - 30, 'DRONE');
-        enemiesManager.spawnEnemy(this.x + 60, this.y + 30, 'DRONE');
-        enemiesManager.spawnEnemy(this.x, this.y - 60, 'DRONE');
-        sound.playShieldRegen();
+      const hpThresholds = [0.75, 0.5, 0.25];
+      for (let i = 0; i < hpThresholds.length; i++) {
+        const threshold = this.maxHp * hpThresholds[i];
+        const key = Math.round(threshold);
+        if (this.hp <= threshold && !this.bossSpawnsDone[key]) {
+          this.bossSpawnsDone[key] = true;
+
+          // Variant-specific phase abilities
+          switch (this.bossVariant) {
+            case 'FOREST':
+              // Ancient Colossus: vine tendril ring + spawn root minions
+              this.shootVineRing();
+              enemiesManager.spawnEnemy(this.x - 50, this.y - 30, 'DRONE');
+              enemiesManager.spawnEnemy(this.x + 50, this.y + 30, 'DRONE');
+              break;
+            case 'WASTELAND':
+              // Toxic Behemoth: acid spit volley + leave toxic trail
+              this.shootAcidSpit();
+              this.spawnAcidTrail();
+              break;
+            case 'TUNDRA':
+              // Cryo Titan: frost nova slow + ice wall bullets
+              this.shootFrostNova();
+              enemiesManager.spawnEnemy(this.x - 60, this.y, 'DRONE');
+              enemiesManager.spawnEnemy(this.x + 60, this.y, 'DRONE');
+              break;
+            case 'CYBER':
+              // Nexus Prime: EMP pulse + spawn 3 drones
+              this.shootEMPLaser();
+              enemiesManager.spawnEnemy(this.x - 60, this.y - 30, 'DRONE');
+              enemiesManager.spawnEnemy(this.x + 60, this.y + 30, 'DRONE');
+              enemiesManager.spawnEnemy(this.x, this.y - 60, 'DRONE');
+              break;
+          }
+          sound.playShieldRegen();
+        }
       }
     }
 
@@ -279,6 +313,104 @@ export class Enemy {
         });
       }
     }
+  }
+
+  // === BOSS VARIANT ABILITY METHODS ===
+
+  shootVineRing() {
+    const bulletCount = 16;
+    for (let i = 0; i < bulletCount; i++) {
+      const theta = (i / bulletCount) * Math.PI * 2;
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(theta) * (this.radius + 8),
+        this.y + Math.sin(theta) * (this.radius + 8),
+        theta,
+        6,
+        this.damage,
+        this.isFriendly,
+        '#22c55e',
+        5
+      );
+    }
+    // Inner ring offset
+    for (let i = 0; i < bulletCount; i++) {
+      const theta = (i / bulletCount) * Math.PI * 2 + Math.PI / bulletCount;
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(theta) * (this.radius + 8),
+        this.y + Math.sin(theta) * (this.radius + 8),
+        theta,
+        4.5,
+        this.damage,
+        this.isFriendly,
+        '#16a34a',
+        4
+      );
+    }
+    projectilesManager.spawnShockwave(this.x, this.y, 80, '#22c55e', 600);
+  }
+
+  shootAcidSpit() {
+    const bulletCount = 8;
+    for (let i = 0; i < bulletCount; i++) {
+      const theta = (i / bulletCount) * Math.PI * 2;
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(theta) * (this.radius + 8),
+        this.y + Math.sin(theta) * (this.radius + 8),
+        theta,
+        5,
+        this.damage + 4,
+        this.isFriendly,
+        '#a3e635',
+        6
+      );
+    }
+    projectilesManager.spawnShockwave(this.x, this.y, 70, '#a3e635', 500);
+  }
+
+  spawnAcidTrail() {
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 100;
+      const poolX = this.x + Math.cos(angle) * dist;
+      const poolY = this.y + Math.sin(angle) * dist;
+      projectilesManager.spawnShockwave(poolX, poolY, 25, '#a3e635', 1200);
+    }
+  }
+
+  shootFrostNova() {
+    const bulletCount = 24;
+    for (let i = 0; i < bulletCount; i++) {
+      const theta = (i / bulletCount) * Math.PI * 2;
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(theta) * (this.radius + 8),
+        this.y + Math.sin(theta) * (this.radius + 8),
+        theta,
+        7,
+        this.damage,
+        this.isFriendly,
+        '#38bdf8',
+        4
+      );
+    }
+    projectilesManager.spawnShockwave(this.x, this.y, 120, '#38bdf8', 800);
+  }
+
+  shootEMPLaser() {
+    const bulletCount = 12;
+    for (let i = 0; i < bulletCount; i++) {
+      const theta = (i / bulletCount) * Math.PI * 2;
+      projectilesManager.spawnBullet(
+        this.x + Math.cos(theta) * (this.radius + 8),
+        this.y + Math.sin(theta) * (this.radius + 8),
+        theta,
+        9,
+        this.damage + 2,
+        this.isFriendly,
+        '#c084fc',
+        5
+      );
+    }
+    projectilesManager.spawnShockwave(this.x, this.y, 90, '#c084fc', 700);
   }
 
   detonateSuicide(player: any) {
@@ -1032,20 +1164,91 @@ export class Enemy {
 
   shoot(angle: number) {
     if (this.type === 'BOSS') {
-      // Ring of 10 red bullets
-      const bulletCount = 10;
-      for (let i = 0; i < bulletCount; i++) {
-        const theta = angle + (i / bulletCount) * Math.PI * 2;
-        projectilesManager.spawnBullet(
-          this.x + Math.cos(theta) * (this.radius + 8),
-          this.y + Math.sin(theta) * (this.radius + 8),
-          theta,
-          8,
-          this.damage,
-          this.isFriendly,
-          '#ff0055',
-          4.5
-        );
+      // Variant-specific attack patterns
+      switch (this.bossVariant) {
+        case 'FOREST': {
+          // Ancient Colossus: dual spiral bullet rings
+          const bulletCount = 10;
+          for (let i = 0; i < bulletCount; i++) {
+            const theta = angle + (i / bulletCount) * Math.PI * 2;
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(theta) * (this.radius + 8),
+              this.y + Math.sin(theta) * (this.radius + 8),
+              theta, 8, this.damage, this.isFriendly, '#22c55e', 4.5
+            );
+          }
+          // Offset inner ring
+          const innerCount = 6;
+          for (let i = 0; i < innerCount; i++) {
+            const theta = angle + Math.PI / innerCount + (i / innerCount) * Math.PI * 2;
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(theta) * (this.radius + 4),
+              this.y + Math.sin(theta) * (this.radius + 4),
+              theta, 5, this.damage, this.isFriendly, '#16a34a', 3.5
+            );
+          }
+          break;
+        }
+        case 'WASTELAND': {
+          // Toxic Behemoth: triple acid spit spread
+          for (let spread = -1; spread <= 1; spread++) {
+            const theta = angle + spread * 0.15;
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(theta) * (this.radius + 8),
+              this.y + Math.sin(theta) * (this.radius + 8),
+              theta, 7, this.damage + 2, this.isFriendly, '#a3e635', 5
+            );
+          }
+          // Slow toxic blobs on sides
+          for (let i = 0; i < 2; i++) {
+            const sideAngle = angle + (i === 0 ? -0.6 : 0.6);
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(sideAngle) * (this.radius + 8),
+              this.y + Math.sin(sideAngle) * (this.radius + 8),
+              sideAngle, 4, this.damage, this.isFriendly, '#65a30d', 6
+            );
+          }
+          break;
+        }
+        case 'TUNDRA': {
+          // Cryo Titan: frost spread + ice bolts
+          const iceCount = 8;
+          for (let i = 0; i < iceCount; i++) {
+            const theta = angle + (i / iceCount) * Math.PI * 2;
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(theta) * (this.radius + 8),
+              this.y + Math.sin(theta) * (this.radius + 8),
+              theta, 9, this.damage, this.isFriendly, '#38bdf8', 4
+            );
+          }
+          // Direct ice bolts at player
+          projectilesManager.spawnBullet(
+            this.x + Math.cos(angle) * (this.radius + 8),
+            this.y + Math.sin(angle) * (this.radius + 8),
+            angle, 14, this.damage + 5, this.isFriendly, '#7dd3fc', 5
+          );
+          break;
+        }
+        case 'CYBER': {
+          // Nexus Prime: spiral laser grid
+          const laserCount = 12;
+          const time = Date.now() / 200;
+          for (let i = 0; i < laserCount; i++) {
+            const theta = angle + (i / laserCount) * Math.PI * 2 + time * 0.3;
+            projectilesManager.spawnBullet(
+              this.x + Math.cos(theta) * (this.radius + 8),
+              this.y + Math.sin(theta) * (this.radius + 8),
+              theta, 10, this.damage, this.isFriendly, '#c084fc', 3.5
+            );
+          }
+          // Fast precision beam
+          projectilesManager.spawnBullet(
+            this.x + Math.cos(angle) * (this.radius + 8),
+            this.y + Math.sin(angle) * (this.radius + 8),
+            angle, 18, this.damage + 3, this.isFriendly, '#e879f9', 3
+          );
+          break;
+        }
       }
     } else if (this.type === 'MECH') {
       // Slow large explosive rocket
@@ -1383,20 +1586,75 @@ export class Enemy {
         ctx.stroke();
         break;
 
-      case 'BOSS':
-        // Big heavy command mech chassis
-        ctx.fillStyle = '#0f172a';
-        ctx.strokeStyle = '#ff0055';
+      case 'BOSS': {
+        // Variant-specific boss visuals
+        let bossColor: string;
+        let bossFill: string;
+        let bossCore: string;
+        let bossShape: 'octagon' | 'hexagon' | 'diamond' | 'square';
+
+        switch (this.bossVariant) {
+          case 'FOREST':
+            bossColor = '#22c55e';
+            bossFill = '#0a2e1a';
+            bossCore = '#4ade80';
+            bossShape = 'hexagon';
+            break;
+          case 'WASTELAND':
+            bossColor = '#a3e635';
+            bossFill = '#1a2e0a';
+            bossCore = '#bef264';
+            bossShape = 'diamond';
+            break;
+          case 'TUNDRA':
+            bossColor = '#38bdf8';
+            bossFill = '#0a1e2e';
+            bossCore = '#7dd3fc';
+            bossShape = 'diamond';
+            break;
+          case 'CYBER':
+            bossColor = '#c084fc';
+            bossFill = '#1a0a2e';
+            bossCore = '#e879f9';
+            bossShape = 'square';
+            break;
+          default:
+            bossColor = '#ff0055';
+            bossFill = '#0f172a';
+            bossCore = '#ff0055';
+            bossShape = 'octagon';
+        }
+
+        // Boss body
+        ctx.fillStyle = bossFill;
+        ctx.strokeStyle = bossColor;
         ctx.lineWidth = 4;
-        
         ctx.beginPath();
-        // Octagon shape
-        for (let i = 0; i < 8; i++) {
-          const angle = (i * Math.PI) / 4;
-          const px = screenX + Math.cos(angle) * this.radius;
-          const py = screenY + Math.sin(angle) * this.radius;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
+
+        if (bossShape === 'octagon') {
+          for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI) / 4;
+            const px = screenX + Math.cos(a) * this.radius;
+            const py = screenY + Math.sin(a) * this.radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+        } else if (bossShape === 'hexagon') {
+          for (let i = 0; i < 6; i++) {
+            const a = (i * Math.PI) / 3;
+            const px = screenX + Math.cos(a) * this.radius;
+            const py = screenY + Math.sin(a) * this.radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+        } else if (bossShape === 'diamond') {
+          ctx.moveTo(screenX, screenY - this.radius);
+          ctx.lineTo(screenX + this.radius, screenY);
+          ctx.lineTo(screenX, screenY + this.radius);
+          ctx.lineTo(screenX - this.radius, screenY);
+        } else {
+          // square
+          ctx.rect(screenX - this.radius * 0.8, screenY - this.radius * 0.8, this.radius * 1.6, this.radius * 1.6);
         }
         ctx.closePath();
         ctx.fill();
@@ -1404,38 +1662,40 @@ export class Enemy {
 
         // Inner glowing core
         const coreBlink = 0.5 + Math.abs(Math.sin(Date.now() / 150)) * 0.5;
-        ctx.fillStyle = `rgba(255, 0, 85, ${coreBlink})`;
+        ctx.fillStyle = bossCore.replace(')', `, ${coreBlink})`).replace('rgb', 'rgba').replace('#', '');
+        // Use hex color with alpha
+        ctx.globalAlpha = coreBlink;
+        ctx.fillStyle = bossCore;
         ctx.beginPath();
         ctx.arc(screenX, screenY, 14, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
 
-        // Dual heavy plasma weapons
-        let bossAngle = Date.now() / 800; // slow sweep default
+        // Weapons
+        let bossAngle = Date.now() / 800;
         if (this.targetUnit) {
           bossAngle = Math.atan2(this.targetUnit.y - this.y, this.targetUnit.x - this.x);
         }
 
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 6;
+        ctx.strokeStyle = bossColor;
+        ctx.lineWidth = 5;
         ctx.beginPath();
-        // Left gun
         ctx.moveTo(screenX + Math.cos(bossAngle - 0.4) * 15, screenY + Math.sin(bossAngle - 0.4) * 15);
         ctx.lineTo(screenX + Math.cos(bossAngle - 0.4) * (this.radius + 15), screenY + Math.sin(bossAngle - 0.4) * (this.radius + 15));
-        // Right gun
         ctx.moveTo(screenX + Math.cos(bossAngle + 0.4) * 15, screenY + Math.sin(bossAngle + 0.4) * 15);
         ctx.lineTo(screenX + Math.cos(bossAngle + 0.4) * (this.radius + 15), screenY + Math.sin(bossAngle + 0.4) * (this.radius + 15));
         ctx.stroke();
 
-        // If shield phase is active (< 50% health), draw a glowing blue barrier in front!
-        if (this.hp < 400) {
-          ctx.strokeStyle = 'rgba(0, 242, 254, 0.7)';
+        // Shield phase barrier (< 50% HP)
+        if (this.hp < this.maxHp / 2) {
+          ctx.strokeStyle = `rgba(${bossColor === '#22c55e' ? '34,197,94' : bossColor === '#a3e635' ? '163,230,53' : bossColor === '#38bdf8' ? '56,189,248' : '192,132,252'}, 0.7)`;
           ctx.lineWidth = 3.5;
           ctx.beginPath();
-          // Draw a semi-circle shield facing the angle of aiming
-          ctx.arc(screenX, screenY, this.radius + 10, bossAngle - Math.PI/3, bossAngle + Math.PI/3);
+          ctx.arc(screenX, screenY, this.radius + 10, bossAngle - Math.PI / 3, bossAngle + Math.PI / 3);
           ctx.stroke();
         }
         break;
+      }
     }
 
     // EMP stun electrical visual overlay
@@ -1527,8 +1787,8 @@ export class EnemiesManager {
     this.spawnEnemy(2040, 1960, 'MECH', true);
   }
 
-  spawnEnemy(x: number, y: number, type: EnemyType, isGuard: boolean = false) {
-    this.enemies.push(new Enemy(x, y, type, false, isGuard, this.difficultyScale, this.campaignStage));
+  spawnEnemy(x: number, y: number, type: EnemyType, isGuard: boolean = false, variant: BossVariant = 'FOREST') {
+    this.enemies.push(new Enemy(x, y, type, false, isGuard, this.difficultyScale, this.campaignStage, variant));
   }
 
   spawnDefender(x: number, y: number) {

@@ -4,7 +4,7 @@ import { HUD } from './components/HUD';
 import { MainMenu } from './components/MainMenu';
 import { TransitionMenu } from './components/TransitionMenu';
 import type { GameEngine } from './game/Engine';
-import type { GameState, EngineStateUpdate, WeaponType, CampaignProgress } from './game/Types';
+import type { GameState, EngineStateUpdate, WeaponType, CampaignProgress, BossVariant } from './game/Types';
 import { loadCampaignProgress } from './game/Engine';
 import { sound } from './game/Sound';
 import { basesManager } from './game/Bases';
@@ -178,6 +178,8 @@ function App() {
 
         if (data === 'DEFENDER') {
           enemiesManager.spawnDefender(sx, sy);
+        } else if (typeof data === 'object' && data.type === 'BOSS') {
+          enemiesManager.spawnEnemy(sx, sy, 'BOSS', false, data.variant as BossVariant);
         } else {
           enemiesManager.spawnEnemy(sx, sy, data, false);
         }
